@@ -66,6 +66,9 @@ a { color: inherit; }
   padding: 0 20px 64px;
 }
 
+/* Guarantee [hidden] wins even over classes that set display unconditionally. */
+[hidden] { display: none !important; }
+
 /* Topbar */
 .topbar {
   display: flex;

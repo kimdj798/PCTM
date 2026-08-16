@@ -28,9 +28,14 @@ endpoint), so no server or API key is required once deployed.
 - **`2026` tab** (`gid=1141924141`): one column per meeting, with role rows
   (Toastmasters, Table Topics Master, Debate Master, Quiz Master, two Speaker
   slots with title/pathway/project, two Evaluators, Grammarian, word/quote of
-  the day, Timer, Ah-counter). This powers the meeting readiness view. Add a
-  new column with a date label (e.g. `Sep 5`) to schedule another meeting —
-  the dashboard picks it up automatically.
+  the day, Timer, Ah-counter). Add a new column with a date label (e.g.
+  `Sep 5`) to schedule another meeting — the dashboard picks it up
+  automatically.
+  - The **readiness score** only counts the 9 roles shown in the Role
+    assignments panel (Toastmasters, Table Topics Master, Debate Master,
+    Quiz Master, Evaluator #1/#2, Grammarian, Timer, Ah-counter). Speaker
+    names/titles/pathways/projects, word/quote of the day, and Theme/TQ are
+    all tracked and editable, but don't affect the score.
 - **Theme / TQ** (optional rows on the `2026` tab): add a row labeled `Theme`
   and a row labeled `TQ` (case-insensitive) anywhere in column A, with the
   meeting's theme and theme questions in that meeting's column. For `TQ`,

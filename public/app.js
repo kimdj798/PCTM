@@ -246,17 +246,16 @@ function buildRolesModel(rows) {
         if (member) filled += 1;
         roles.push({ label: field.label.trim(), member, isText: false, sheetRow: field.sheetRow, sheetCol });
       } else if (field.type === "text") {
-        total += 1;
+        // word of the day / quote of the day: tracked but not required for readiness.
         const value = clean(field.row[col]);
-        if (value) filled += 1;
         roles.push({ label: field.label.trim(), value, isText: true, sheetRow: field.sheetRow, sheetCol });
       } else {
+        // Speakers are tracked but shown in the Prepared speeches panel, not
+        // Role assignments, so they don't count toward readiness.
         const member = clean(field.memberRow[col]);
         const title = clean(field.titleRow[col]);
         const pathways = clean(field.pathwaysRow[col]);
         const project = clean(field.projectRow[col]);
-        total += 4;
-        filled += [member, title, pathways, project].filter(Boolean).length;
         speakers.push({
           label: field.label.trim(), member, title, pathways, project, sheetCol,
           memberSheetRow: field.memberSheetRow, titleSheetRow: field.titleSheetRow,
@@ -277,15 +276,7 @@ function buildRolesModel(rows) {
 }
 
 function missingFields(meeting) {
-  const missing = [];
-  meeting.roles.forEach(r => { if (!(r.isText ? r.value : r.member)) missing.push(r.label); });
-  meeting.speakers.forEach(s => {
-    if (!s.member) missing.push(`${s.label} — Speaker`);
-    if (!s.title) missing.push(`${s.label} — Title`);
-    if (!s.pathways) missing.push(`${s.label} — Pathway`);
-    if (!s.project) missing.push(`${s.label} — Project`);
-  });
-  return missing;
+  return meeting.roles.filter(r => !r.isText && !r.member).map(r => r.label);
 }
 
 // ---- Editing (writes back to the Sheet via Apps Script) ----
@@ -494,25 +485,59 @@ function renderAgendaTable() {
   </table></div>`;
 }
 
+function scheduleWeeksWithSpeeches(model) {
+  const map = new Map();
+  model.schedule.speeches.forEach(s => {
+    const key = `${s.monthNum}-${s.weekNum}`;
+    if (!map.has(key)) map.set(key, { monthNum: s.monthNum, weekNum: s.weekNum, label: s.label, completed: s.completed, speeches: [] });
+    map.get(key).speeches.push(s);
+  });
+  return [...map.values()].sort((a, b) => (a.monthNum - b.monthNum) || (a.weekNum - b.weekNum));
+}
+
+function nextPipelineWeek(model) {
+  const upcomingWeeks = scheduleWeeksWithSpeeches(model).filter(w => !w.completed);
+  const coming = model.roles.comingMeeting;
+  if (coming?.date) {
+    const cMonth = coming.date.getMonth() + 1;
+    const cWeek = weekOfMonth(coming.date.getDate());
+    const after = upcomingWeeks.find(w => w.monthNum > cMonth || (w.monthNum === cMonth && w.weekNum > cWeek));
+    if (after) return after;
+  }
+  return upcomingWeeks[0] || null;
+}
+
 function renderMeeting(model) {
   const meetingsByView = { past: model.roles.pastMeeting, coming: model.roles.comingMeeting, next: model.roles.nextMeeting };
   const meeting = meetingsByView[state.meetingView];
 
   if (!meeting) {
-    setText("meetingTitle", "No Scheduled Meeting");
+    const preview = nextPipelineWeek(model);
     const readiness = document.getElementById("meetingReadiness");
     readiness.className = "meeting-readiness needs-attention";
     readiness.setAttribute("aria-disabled", "true");
     readiness.tabIndex = -1;
     setText("readinessStatus", "Needs attention");
-    setText("readinessScore", "0% (0/19)");
-    setText("readinessMissing", "No meeting is scheduled in this view yet.");
+    setText("readinessScore", "0% (0/9)");
+    setText("readinessMissing", preview ? "This meeting hasn't been added to the 2026 tab yet." : "No meeting is scheduled in this view yet.");
     readiness.querySelector(".readiness-track").setAttribute("aria-valuenow", "0");
     document.getElementById("readinessBar").style.width = "0%";
     document.getElementById("weekAssignments").innerHTML = `<div class="empty-state">Add a column to the 2026 tab to populate this meeting.</div>`;
-    document.getElementById("weekSpeeches").innerHTML = `<div class="empty-state">No prepared speeches assigned yet.</div>`;
     document.getElementById("agendaTimeline").innerHTML = renderAgendaTable();
     document.getElementById("meetingThemeBanner").hidden = true;
+
+    if (preview) {
+      setText("meetingTitle", `${preview.label} (from Speech Pipeline)`);
+      document.getElementById("weekSpeeches").innerHTML = preview.speeches.map(s => `
+        <article class="week-speech">
+          <span class="speaker">${escapeHtml(s.member)}</span>
+          <h4>${escapeHtml(s.title)}</h4>
+          <p>${escapeHtml(s.project ? `Project · ${s.project}` : "Project · Pending")}</p>
+        </article>`).join("");
+    } else {
+      setText("meetingTitle", "No Scheduled Meeting");
+      document.getElementById("weekSpeeches").innerHTML = `<div class="empty-state">No prepared speeches assigned yet.</div>`;
+    }
     return;
   }
 
@@ -575,10 +600,7 @@ function renderMeetingTheme(meeting) {
 }
 
 function recomputeReadiness(meeting) {
-  let filled = 0;
-  meeting.roles.forEach(r => { if (r.isText ? r.value : r.member) filled += 1; });
-  meeting.speakers.forEach(s => { filled += [s.member, s.title, s.pathways, s.project].filter(Boolean).length; });
-  meeting.filled = filled;
+  meeting.filled = meeting.roles.filter(r => !r.isText && r.member).length;
   renderMeetingReadiness(meeting);
 }
 
