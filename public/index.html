@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="PCTM speech pipeline and meeting role dashboard" />
+    <title>PCTM Dashboard</title>
+    <link rel="stylesheet" href="./styles.css?v=1" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="topbar">
+        <a class="brand" href="#top" aria-label="PCTM dashboard home">
+          <span class="brand-mark">PC<em>TM</em></span>
+          <span class="brand-sub">Speech &amp; Role Dashboard</span>
+        </a>
+        <button id="refreshButton" class="refresh-button" type="button" aria-label="Refresh from Google Sheet">
+          <span aria-hidden="true">&#8635;</span> Refresh
+        </button>
+      </header>
+
+      <main id="top">
+        <section class="hero">
+          <div class="hero-copy">
+            <p class="eyebrow">2026 CLUB SCHEDULE</p>
+            <h1>Every speech<br /><em>moves us forward.</em></h1>
+            <p class="hero-sub">Track who's speaking, what they're working on, and what each meeting still needs &mdash; live from the club sheet.</p>
+            <div id="noticeRow" class="notice-row"></div>
+          </div>
+          <div class="hero-meta">
+            <div><span>AS OF</span><strong id="asOfDate">&mdash;</strong></div>
+            <div><span>DATA SOURCE</span><strong>LIVE GOOGLE SHEET</strong></div>
+            <a id="sheetLink" target="_blank" rel="noreferrer">Open source &#8599;</a>
+          </div>
+        </section>
+
+        <div id="statusBanner" class="status-banner" role="status">Loading the latest data from Google Sheets.</div>
+
+        <section class="metric-strip" aria-label="Key metrics">
+          <article class="metric-card accent-blue"><span>COMPLETED SPEECHES</span><strong id="metricCompleted">&mdash;</strong><small>Delivered so far</small></article>
+          <article class="metric-card accent-orange"><span>UPCOMING SPEECHES</span><strong id="metricUpcoming">&mdash;</strong><small>Planned Jul&ndash;Dec</small></article>
+          <article class="metric-card accent-aqua"><span>ACTIVE SPEAKERS</span><strong id="metricSpeakers">&mdash;</strong><small>In the pipeline</small></article>
+          <article class="metric-card accent-yellow"><span>MEETINGS LOGGED</span><strong id="metricMeetings">&mdash;</strong><small>Role sheet columns</small></article>
+        </section>
+
+        <nav class="dashboard-tabs" aria-label="Meeting views" role="tablist">
+          <button type="button" role="tab" data-dashboard-tab="past" aria-selected="false">Past Meeting</button>
+          <button type="button" role="tab" data-dashboard-tab="coming" aria-selected="true">Coming Up</button>
+          <button type="button" role="tab" data-dashboard-tab="next" aria-selected="false">Next Meeting</button>
+        </nav>
+
+        <section class="dashboard-section week-section" id="this-meeting">
+          <div class="section-heading meeting-heading">
+            <div>
+              <p class="eyebrow">MEETING ROLES</p>
+              <h2 id="meetingTitle">Loading meeting date</h2>
+            </div>
+            <div id="meetingReadiness" class="meeting-readiness needs-attention" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Open meeting readiness details">
+              <div class="readiness-heading"><span id="readinessStatus">Checking readiness</span><strong id="readinessScore">0% (0/19)</strong></div>
+              <div class="readiness-track" role="progressbar" aria-label="Meeting readiness" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="readinessBar"></span></div>
+              <p id="readinessMissing" class="readiness-missing">Checking required fields.</p>
+            </div>
+          </div>
+          <div class="week-stack">
+            <article class="panel assignments-panel">
+              <div class="panel-title"><h3>Role assignments</h3><span>From the 2026 tab</span></div>
+              <div id="weekAssignments" class="assignment-grid"></div>
+            </article>
+            <article class="panel week-speeches-panel">
+              <div class="panel-title"><h3>Prepared speeches</h3><span>Click for details</span></div>
+              <div id="weekSpeeches" class="week-speeches"></div>
+            </article>
+            <article class="panel agenda-panel">
+              <div class="panel-title"><h3>Standard agenda</h3><span>General template</span></div>
+              <div id="agendaTimeline" class="agenda-timeline"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="dashboard-section pipeline-section" id="pipeline">
+          <div class="section-heading">
+            <div><p class="eyebrow">SPEECH PIPELINE</p><h2>Jul&ndash;Dec speaking schedule</h2><p>Hover a card for the project and title. Click a member to filter.</p></div>
+            <div class="filters">
+              <label>Member<select id="memberFilter"><option value="all">All members</option></select></label>
+            </div>
+          </div>
+          <div class="two-column">
+            <article class="panel leaderboard-panel">
+              <div class="panel-title"><h3>Speeches per member</h3><span>Click a row to filter</span></div>
+              <div id="memberChart" class="member-chart"></div>
+            </article>
+            <article class="panel leaderboard-panel">
+              <div class="panel-title"><h3>Member contribution</h3><span id="pipelineScopeLabel">All members</span></div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Member</th><th>Speeches</th><th>Planned</th><th>Delivered</th></tr></thead>
+                  <tbody id="memberTable"></tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+          <article class="panel timeline-panel">
+            <div class="panel-title"><h3>Timeline</h3><span id="timelineCount">&mdash;</span></div>
+            <div id="speechTimeline" class="speech-timeline"></div>
+          </article>
+        </section>
+      </main>
+
+      <footer>
+        <div><strong>PCTM</strong><span>Toastmasters club speech &amp; role tracker</span></div>
+        <p id="lastSync">Last synced &mdash;</p>
+      </footer>
+    </div>
+
+    <dialog id="missingDetailsDialog" class="missing-dialog" aria-labelledby="missingDialogTitle">
+      <div class="missing-dialog-heading">
+        <div><p>MEETING READINESS</p><h2 id="missingDialogTitle">Missing required fields</h2></div>
+        <button type="button" id="closeMissingDialog" class="dialog-close" aria-label="Close missing fields">&times;</button>
+      </div>
+      <p id="missingDialogSummary" class="missing-dialog-summary"></p>
+      <ul id="missingDialogList" class="missing-dialog-list"></ul>
+    </dialog>
+    <dialog id="speechDetailsDialog" class="speech-dialog" aria-labelledby="speechDialogTitle">
+      <div class="missing-dialog-heading">
+        <div><p>PREPARED SPEECH</p><h2 id="speechDialogTitle">Speech details</h2></div>
+        <button type="button" id="closeSpeechDialog" class="dialog-close" aria-label="Close speech details">&times;</button>
+      </div>
+      <div id="speechDialogDetails" class="speech-dialog-details"></div>
+    </dialog>
+    <div id="tooltip" class="tooltip" role="tooltip" aria-hidden="true"></div>
+    <script src="./app.js?v=1" defer></script>
+  </body>
+</html>
