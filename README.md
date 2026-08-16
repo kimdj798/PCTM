@@ -42,3 +42,43 @@ are assigned for the selected meeting.
 - "Completed" vs "upcoming" is approximated as week-of-month (`ceil(day / 7)`)
   compared against today in Korea time, since the schedule tab tracks weeks,
   not exact dates.
+
+## Editing meeting roles from the dashboard
+
+The public `gviz` CSV endpoint used to *read* the sheet is read-only, so
+writing role assignments back requires a small Apps Script Web App deployed
+inside the Sheet itself. Once set up, an **Edit roles** button appears next
+to the Meeting Roles heading; anyone with the shared password can edit role
+assignments and speaker details inline, and changes save straight to the
+`2026` tab.
+
+### 1. Deploy the Apps Script
+
+1. Open the Google Sheet → **Extensions → Apps Script**.
+2. Delete any placeholder code and paste in the contents of
+   [`apps-script/Code.gs`](apps-script/Code.gs).
+3. Change `EDIT_PASSWORD` to a real shared password (not `CHANGE_ME`).
+4. **Deploy → New deployment → type: Web app.**
+   - Execute as: **Me**
+   - Who has access: **Anyone**
+5. Click **Deploy**, authorize the script when prompted, and copy the Web
+   app URL (ends in `/exec`).
+6. Whenever you edit `Code.gs` later (e.g. to change the password), you
+   must **Deploy → Manage deployments → Edit → New version** for the
+   change to take effect — the `/exec` URL doesn't pick up new code
+   automatically.
+
+### 2. Point the dashboard at it
+
+Set `EDIT_ENDPOINT` near the top of [`public/app.js`](public/app.js) to the
+Web app URL from step 5, then redeploy (push to `main`). The **Edit roles**
+button stays hidden until this is set.
+
+### Notes
+
+- The password is a simple shared gate, not per-user authentication — treat
+  it like a door code, and rotate it (redeploy with a new `EDIT_PASSWORD`)
+  if it leaks.
+- Only fields on the `2026` roles tab are editable (role assignments,
+  speaker title/pathway/project). The speech schedule tab is read-only from
+  the dashboard.

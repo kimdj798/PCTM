@@ -1,9 +1,14 @@
-const state = { model: null, member: "all", meetingView: "coming" };
+const state = { model: null, member: "all", meetingView: "coming", editing: false };
 const SHEET_ID = "1MYHmvO0-doUTvsIXvErfydb1wke_tQ_vCrZOk2CorN4";
 const SCHEDULE_GID = "1701553634";
 const ROLES_GID = "1141924141";
 const SHEET_SOURCE = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit?gid=${SCHEDULE_GID}`;
 const YEAR = 2026;
+
+// Set this to your deployed Apps Script Web App URL (see README) to enable
+// editing role assignments from the dashboard. Leave blank to disable editing.
+const EDIT_ENDPOINT = "";
+const EDIT_PASSWORD_KEY = "pctm_edit_password";
 
 const MONTH_NAMES = { 1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun", 7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec" };
 const KOREAN_MONTH_TO_NUM = { "1월": 1, "2월": 2, "3월": 3, "4월": 4, "5월": 5, "6월": 6, "7월": 7, "8월": 8, "9월": 9, "10월": 10, "11월": 11, "12월": 12 };
@@ -153,16 +158,17 @@ function buildRolesModel(rows) {
       fields.push({
         type: "speaker", label,
         memberRow: dataRows[i], titleRow: dataRows[i + 1] || [], pathwaysRow: dataRows[i + 2] || [], projectRow: dataRows[i + 3] || [],
+        memberSheetRow: i + 2, titleSheetRow: i + 3, pathwaysSheetRow: i + 4, projectSheetRow: i + 5,
       });
       i += 4;
       continue;
     }
     if (TEXT_ROLE_LABELS.has(label.toLowerCase())) {
-      fields.push({ type: "text", label, row: dataRows[i] });
+      fields.push({ type: "text", label, row: dataRows[i], sheetRow: i + 2 });
       i += 1;
       continue;
     }
-    fields.push({ type: "person", label, row: dataRows[i] });
+    fields.push({ type: "person", label, row: dataRows[i], sheetRow: i + 2 });
     i += 1;
   }
 
@@ -174,17 +180,18 @@ function buildRolesModel(rows) {
     const roles = [];
     const speakers = [];
     let filled = 0, total = 0;
+    const sheetCol = col + 1;
     fields.forEach(field => {
       if (field.type === "person") {
         total += 1;
         const member = clean(field.row[col]);
         if (member) filled += 1;
-        roles.push({ label: field.label.trim(), member, isText: false });
+        roles.push({ label: field.label.trim(), member, isText: false, sheetRow: field.sheetRow, sheetCol });
       } else if (field.type === "text") {
         total += 1;
         const value = clean(field.row[col]);
         if (value) filled += 1;
-        roles.push({ label: field.label.trim(), value, isText: true });
+        roles.push({ label: field.label.trim(), value, isText: true, sheetRow: field.sheetRow, sheetCol });
       } else {
         const member = clean(field.memberRow[col]);
         const title = clean(field.titleRow[col]);
@@ -192,7 +199,11 @@ function buildRolesModel(rows) {
         const project = clean(field.projectRow[col]);
         total += 4;
         filled += [member, title, pathways, project].filter(Boolean).length;
-        speakers.push({ label: field.label.trim(), member, title, pathways, project });
+        speakers.push({
+          label: field.label.trim(), member, title, pathways, project, sheetCol,
+          memberSheetRow: field.memberSheetRow, titleSheetRow: field.titleSheetRow,
+          pathwaysSheetRow: field.pathwaysSheetRow, projectSheetRow: field.projectSheetRow,
+        });
       }
     });
     meetings.push({ col, label, date, roles, speakers, filled, total });
@@ -217,6 +228,85 @@ function missingFields(meeting) {
     if (!s.project) missing.push(`${s.label} — Project`);
   });
   return missing;
+}
+
+// ---- Editing (writes back to the Sheet via Apps Script) ----
+
+function editingAvailable() { return Boolean(EDIT_ENDPOINT); }
+function editingUnlocked() { return Boolean(sessionStorage.getItem(EDIT_PASSWORD_KEY)); }
+
+async function saveCell(row, col, value) {
+  const password = sessionStorage.getItem(EDIT_PASSWORD_KEY) || "";
+  const response = await fetch(EDIT_ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ password, updates: [{ row, col, value }] }),
+  });
+  const payload = await response.json().catch(() => ({ ok: false, error: "Invalid response from Apps Script." }));
+  if (!payload.ok) throw new Error(payload.error || "Save failed.");
+  return payload;
+}
+
+function unlockEditing() {
+  const dialog = document.getElementById("editUnlockDialog");
+  document.getElementById("editUnlockError").hidden = true;
+  document.getElementById("editUnlockPassword").value = "";
+  dialog.showModal();
+}
+
+function lockEditing() {
+  sessionStorage.removeItem(EDIT_PASSWORD_KEY);
+  state.editing = false;
+  updateEditToggle();
+  if (state.model) renderMeeting(state.model);
+}
+
+function updateEditToggle() {
+  const button = document.getElementById("editToggleButton");
+  if (!button) return;
+  button.hidden = !editingAvailable();
+  const unlocked = editingUnlocked();
+  button.textContent = unlocked ? "Lock editing" : "Edit roles";
+  button.classList.toggle("is-active", unlocked);
+}
+
+function makeEditableField(currentValue, { row, col, placeholder = "Pending", onSaved }) {
+  const wrap = document.createElement("div");
+  wrap.className = "editable-field";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = currentValue || "";
+  input.placeholder = placeholder;
+  const status = document.createElement("span");
+  status.className = "editable-status";
+  wrap.appendChild(input);
+  wrap.appendChild(status);
+
+  let saving = false;
+  const commit = async () => {
+    const next = input.value.trim();
+    if (next === (currentValue || "") || saving) return;
+    saving = true;
+    status.textContent = "Saving…";
+    status.className = "editable-status saving";
+    try {
+      await saveCell(row, col, next);
+      currentValue = next;
+      status.textContent = "Saved";
+      status.className = "editable-status saved";
+      if (onSaved) onSaved(next);
+    } catch (error) {
+      status.textContent = error.message || "Save failed";
+      status.className = "editable-status error";
+    } finally {
+      saving = false;
+    }
+  };
+  input.addEventListener("blur", commit);
+  input.addEventListener("keydown", event => {
+    if (event.key === "Enter") { event.preventDefault(); input.blur(); }
+  });
+  return wrap;
 }
 
 // ---- Tooltip helpers ----
@@ -369,29 +459,100 @@ function renderMeeting(model) {
 
   setText("meetingTitle", meeting.date ? `${formatDate(meeting.date)} Meeting` : `${meeting.label} Meeting`);
   renderMeetingReadiness(meeting);
-
-  const personRoles = meeting.roles.filter(r => !r.isText);
-  const textRoles = meeting.roles.filter(r => r.isText);
-  document.getElementById("weekAssignments").innerHTML = [
-    ...personRoles.map(r => `<div class="assignment ${r.member ? "" : "pending"}"><span>${escapeHtml(r.label)}</span><strong>${escapeHtml(r.member || "Pending")}</strong></div>`),
-    ...textRoles.map(r => `<div class="assignment ${r.value ? "" : "pending"}"><span>${escapeHtml(r.label)}</span><strong>${escapeHtml(r.value || "Pending")}</strong></div>`),
-  ].join("");
-
-  const weekContainer = document.getElementById("weekSpeeches");
-  weekContainer.innerHTML = meeting.speakers.map(s => `
-    <article class="week-speech ${(!s.member || !s.title) ? "pending" : ""}" role="button" tabindex="0" aria-haspopup="dialog">
-      <span class="speaker">${escapeHtml(s.label)} · ${escapeHtml(s.member || "Pending")}</span>
-      <h4>${escapeHtml(s.title || "Title Pending")}</h4>
-      <p>${escapeHtml(s.pathways ? `Pathway · ${s.pathways}` : "Pathway · Pending")}</p>
-    </article>`).join("") || `<div class="empty-state">No speakers assigned yet.</div>`;
-  weekContainer.querySelectorAll(".week-speech").forEach((card, index) => {
-    const speech = meeting.speakers[index];
-    const openDetails = () => showSpeechDetails(speech);
-    card.addEventListener("click", openDetails);
-    card.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openDetails(); } });
-  });
-
+  renderWeekAssignments(meeting);
+  renderWeekSpeeches(meeting);
   document.getElementById("agendaTimeline").innerHTML = renderAgenda(meeting);
+}
+
+function recomputeReadiness(meeting) {
+  let filled = 0;
+  meeting.roles.forEach(r => { if (r.isText ? r.value : r.member) filled += 1; });
+  meeting.speakers.forEach(s => { filled += [s.member, s.title, s.pathways, s.project].filter(Boolean).length; });
+  meeting.filled = filled;
+  renderMeetingReadiness(meeting);
+}
+
+function renderWeekAssignments(meeting) {
+  const container = document.getElementById("weekAssignments");
+  container.innerHTML = "";
+  const editing = editingAvailable() && editingUnlocked();
+  meeting.roles.forEach(r => {
+    const cell = document.createElement("div");
+    const value = r.isText ? r.value : r.member;
+    cell.className = `assignment ${value ? "" : "pending"}`;
+    const label = document.createElement("span");
+    label.textContent = r.label;
+    cell.appendChild(label);
+    if (editing) {
+      cell.appendChild(makeEditableField(value, {
+        row: r.sheetRow, col: r.sheetCol,
+        onSaved: next => {
+          if (r.isText) r.value = next; else r.member = next;
+          cell.classList.toggle("pending", !next);
+          recomputeReadiness(meeting);
+        },
+      }));
+    } else {
+      const strong = document.createElement("strong");
+      strong.textContent = value || "Pending";
+      cell.appendChild(strong);
+    }
+    container.appendChild(cell);
+  });
+}
+
+function renderWeekSpeeches(meeting) {
+  const container = document.getElementById("weekSpeeches");
+  container.innerHTML = "";
+  if (!meeting.speakers.length) {
+    container.innerHTML = `<div class="empty-state">No speakers assigned yet.</div>`;
+    return;
+  }
+  const editing = editingAvailable() && editingUnlocked();
+  meeting.speakers.forEach(s => {
+    const card = document.createElement("article");
+    card.className = `week-speech ${(!s.member || !s.title) ? "pending" : ""}`;
+    if (editing) {
+      const heading = document.createElement("span");
+      heading.className = "speaker";
+      heading.textContent = s.label;
+      card.appendChild(heading);
+      const fieldSpecs = [
+        ["Speaker", "member", s.memberSheetRow],
+        ["Title", "title", s.titleSheetRow],
+        ["Pathway", "pathways", s.pathwaysSheetRow],
+        ["Project", "project", s.projectSheetRow],
+      ];
+      fieldSpecs.forEach(([fieldLabel, key, row]) => {
+        const row_ = document.createElement("label");
+        row_.className = "speech-edit-row";
+        const span = document.createElement("span");
+        span.textContent = fieldLabel;
+        row_.appendChild(span);
+        row_.appendChild(makeEditableField(s[key], {
+          row, col: s.sheetCol,
+          onSaved: next => {
+            s[key] = next;
+            card.classList.toggle("pending", !s.member || !s.title);
+            recomputeReadiness(meeting);
+          },
+        }));
+        card.appendChild(row_);
+      });
+    } else {
+      card.setAttribute("role", "button");
+      card.tabIndex = 0;
+      card.setAttribute("aria-haspopup", "dialog");
+      card.innerHTML = `
+        <span class="speaker">${escapeHtml(s.label)} · ${escapeHtml(s.member || "Pending")}</span>
+        <h4>${escapeHtml(s.title || "Title Pending")}</h4>
+        <p>${escapeHtml(s.pathways ? `Pathway · ${s.pathways}` : "Pathway · Pending")}</p>`;
+      const openDetails = () => showSpeechDetails(s);
+      card.addEventListener("click", openDetails);
+      card.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openDetails(); } });
+    }
+    container.appendChild(card);
+  });
 }
 
 function showSpeechDetails(speech) {
@@ -502,7 +663,6 @@ function renderNotices(model) {
 
 function render(model, meta) {
   setText("asOfDate", formatDate(todayKst(), { year: "numeric" }));
-  document.getElementById("sheetLink").href = meta.source;
 
   const completed = model.schedule.speeches.filter(s => s.completed).length;
   const upcoming = model.schedule.speeches.filter(s => !s.completed).length;
@@ -567,7 +727,41 @@ function bindEvents() {
   });
   document.getElementById("closeMissingDialog").addEventListener("click", () => document.getElementById("missingDetailsDialog").close());
   document.getElementById("closeSpeechDialog").addEventListener("click", () => document.getElementById("speechDetailsDialog").close());
+
+  document.getElementById("editToggleButton").addEventListener("click", () => {
+    if (editingUnlocked()) lockEditing();
+    else unlockEditing();
+  });
+  document.getElementById("closeEditUnlockDialog").addEventListener("click", () => document.getElementById("editUnlockDialog").close());
+  document.getElementById("editUnlockForm").addEventListener("submit", async event => {
+    event.preventDefault();
+    const password = document.getElementById("editUnlockPassword").value;
+    const errorEl = document.getElementById("editUnlockError");
+    const submitButton = event.currentTarget.querySelector("button[type=submit]");
+    submitButton.disabled = true;
+    errorEl.hidden = true;
+    try {
+      const response = await fetch(EDIT_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ password, updates: [] }),
+      });
+      const payload = await response.json().catch(() => ({ ok: false }));
+      if (!payload.ok) throw new Error(payload.error || "Incorrect password.");
+      sessionStorage.setItem(EDIT_PASSWORD_KEY, password);
+      state.editing = true;
+      document.getElementById("editUnlockDialog").close();
+      updateEditToggle();
+      if (state.model) renderMeeting(state.model);
+    } catch (error) {
+      errorEl.textContent = error.message || "Could not verify password.";
+      errorEl.hidden = false;
+    } finally {
+      submitButton.disabled = false;
+    }
+  });
 }
 
 bindEvents();
+updateEditToggle();
 loadData(false);

@@ -130,15 +130,6 @@ a { color: inherit; }
 .hero-meta div { display: flex; flex-direction: column; gap: 2px; }
 .hero-meta span { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.8; }
 .hero-meta strong { font-size: 16px; font-weight: 700; }
-.hero-meta a {
-  text-decoration: none;
-  font-weight: 700;
-  font-size: 13px;
-  padding: 8px 14px;
-  border-radius: 999px;
-  background: #ffffff;
-  color: var(--series-7);
-}
 
 /* Status banner */
 .status-banner {
@@ -270,6 +261,53 @@ a { color: inherit; }
 .week-speech p { margin: 0; font-size: 12.5px; color: var(--text-secondary); }
 .week-speech.pending { border-style: dashed; }
 .week-speech.pending .speaker { color: var(--text-muted); }
+.week-speech .speech-edit-row { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.week-speech .speech-edit-row span { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+
+/* Edit toggle + inline field editing */
+.edit-toggle-button {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--series-1);
+  background: transparent;
+  color: var(--series-1);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.edit-toggle-button.is-active { background: var(--series-1); color: #ffffff; }
+
+.editable-field { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.editable-field input {
+  flex: 1;
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text-primary);
+}
+.editable-field input:focus { outline: 2px solid var(--series-1); outline-offset: 1px; }
+.editable-status { font-size: 11px; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+.editable-status.saving { color: var(--text-muted); }
+.editable-status.saved { color: var(--good); }
+.editable-status.error { color: var(--critical); }
+
+.edit-unlock-form { padding: 8px 20px 20px; display: flex; flex-direction: column; gap: 8px; }
+.edit-unlock-form label { font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.edit-unlock-form input {
+  font: inherit; font-size: 15px; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--page); color: var(--text-primary);
+}
+.edit-unlock-error { margin: 0; font-size: 12.5px; color: var(--critical); }
+.edit-unlock-submit {
+  margin-top: 4px; padding: 10px 16px; border-radius: 999px; border: none;
+  background: var(--series-1); color: #ffffff; font-weight: 700; font-size: 14px; cursor: pointer;
+}
 
 .agenda-detail-item { padding: 12px 0; border-top: 1px solid var(--gridline); }
 .agenda-detail-item:first-child { border-top: none; padding-top: 0; }
