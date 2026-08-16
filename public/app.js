@@ -2,44 +2,92 @@ const state = { model: null, member: "all", meetingView: "coming", editing: fals
 const SHEET_ID = "1MYHmvO0-doUTvsIXvErfydb1wke_tQ_vCrZOk2CorN4";
 const SCHEDULE_GID = "1701553634";
 const ROLES_GID = "1141924141";
+const OFFICERS_GID = "2126938942";
 const SHEET_SOURCE = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit?gid=${SCHEDULE_GID}`;
 const YEAR = 2026;
 
 // Set this to your deployed Apps Script Web App URL (see README) to enable
 // editing role assignments from the dashboard. Leave blank to disable editing.
-const EDIT_ENDPOINT = "";
+const EDIT_ENDPOINT = "https://script.google.com/macros/s/AKfycbwlBDUQt8kDJT4ngzlqmjF6by31Y5Pm2iX_bfq3RRNeNKW45CVNav5atwlbF1i8QoBF/exec";
 const EDIT_PASSWORD_KEY = "pctm_edit_password";
 
 const MONTH_NAMES = { 1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun", 7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec" };
 const KOREAN_MONTH_TO_NUM = { "1월": 1, "2월": 2, "3월": 3, "4월": 4, "5월": 5, "6월": 6, "7월": 7, "8월": 8, "9월": 9, "10월": 10, "11월": 11, "12월": 12 };
-const PERSON_ROLE_LABELS = ["Toastmasters", "Table Topics Master", "Debate Master", "Quiz Master", "Evaluator #1", "Evaluator #2", "Grammarian", "Timer", "Ah-counter"];
 const TEXT_ROLE_LABELS = new Set(["word of the day", "quote of the day"]);
-const AGENDA_FALLBACK = [
-  ["09:50", "Icebreaking", "Members & guests"],
-  ["10:00", "Introduction", "Toastmasters"],
-  ["10:05", "Table Topics Session", "Table Topics Master"],
-  ["10:20", "Prepared Speech Session", "Speaker #1 & #2"],
-  ["10:50", "Debate / Quiz Session", "Debate Master & Quiz Master"],
-  ["11:10", "Break", "10 minutes"],
-  ["11:20", "Evaluation Session", "Evaluator #1 & #2"],
-  ["11:45", "Reports", "Grammarian, Timer, Ah-counter"],
-  ["11:55", "Announcements", "Word & Quote of the day"],
-  ["12:00", "Closing", "Toastmasters"],
+const META_ROLE_LABELS = new Set(["theme", "tq"]);
+// PCTM's standard meeting agenda template (Time / Segment / Role taker),
+// matching the club's printed agenda sheet exactly.
+const AGENDA_BLOCKS = [
+  { time: "10:00", rows: [["Opening", "Chairperson"]] },
+  { time: "10:10", highlight: true, rows: [["Theme Talk", "Toastmasters"]] },
+  {
+    time: "10:40",
+    rows: [
+      ["Program Introduction", "Toastmasters"],
+      ["Role takers introduction", "Toastmasters"],
+      ["Grammarian", "Grammarian"],
+      ["Timer", "Timer"],
+    ],
+  },
+  {
+    time: "10:45",
+    highlight: true,
+    rows: [
+      ["Prepared Speech", "Toastmasters"],
+      ["Evaluator's speech introduction", "Evaluator"],
+      ["Introduce Speaker (N-T-T-N)", "Speaker"],
+      ["Written feedback", ""],
+      ["Timer's report", ""],
+    ],
+  },
+  {
+    time: "11:10",
+    highlight: true,
+    rows: [
+      ["Table Topics", "Topics master"],
+      ["Provide questions to 5~6 speakers", ""],
+      ["Timer's report", ""],
+      ["Vote for the best speaker", ""],
+    ],
+  },
+  { time: "11:10", highlight: true, rows: [["Debate (10 + 10)", "Debate Master"]] },
+  {
+    time: "11:30",
+    highlight: true,
+    rows: [
+      ["Speech Evaluation", "Evaluator"],
+      ["Speech evaluation", ""],
+    ],
+  },
+  {
+    time: "11:40",
+    highlight: true,
+    rows: [
+      ["Evaluation", "Toastmasters"],
+      ["Timer's report", "Timer"],
+      ["Grammarian's report", "Grammarian"],
+      ["Quiz session", "Quiz master"],
+      ["Closing", "Chairperson"],
+    ],
+  },
+  { time: "11:50", rows: [["Club Business", "Chairperson"]] },
 ];
 
 async function fetchPublicSheets() {
   const base = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq`;
   const stamp = Date.now();
-  const [scheduleResponse, rolesResponse] = await Promise.all([
+  const [scheduleResponse, rolesResponse, officersResponse] = await Promise.all([
     fetch(`${base}?gid=${SCHEDULE_GID}&tqx=out%3Acsv&_=${stamp}`, { cache: "no-store" }),
     fetch(`${base}?gid=${ROLES_GID}&tqx=out%3Acsv&_=${stamp}`, { cache: "no-store" }),
+    fetch(`${base}?gid=${OFFICERS_GID}&tqx=out%3Acsv&_=${stamp}`, { cache: "no-store" }),
   ]);
-  if (!scheduleResponse.ok || !rolesResponse.ok) {
-    throw new Error(`Google Sheets returned ${scheduleResponse.status}/${rolesResponse.status}`);
+  if (!scheduleResponse.ok || !rolesResponse.ok || !officersResponse.ok) {
+    throw new Error(`Google Sheets returned ${scheduleResponse.status}/${rolesResponse.status}/${officersResponse.status}`);
   }
   return {
     scheduleCsv: await scheduleResponse.text(),
     rolesCsv: await rolesResponse.text(),
+    officersCsv: await officersResponse.text(),
     fetchedAt: new Date().toISOString(),
     source: SHEET_SOURCE,
   };
@@ -163,6 +211,11 @@ function buildRolesModel(rows) {
       i += 4;
       continue;
     }
+    if (META_ROLE_LABELS.has(label.toLowerCase())) {
+      fields.push({ type: "meta", key: label.toLowerCase(), row: dataRows[i], sheetRow: i + 2 });
+      i += 1;
+      continue;
+    }
     if (TEXT_ROLE_LABELS.has(label.toLowerCase())) {
       fields.push({ type: "text", label, row: dataRows[i], sheetRow: i + 2 });
       i += 1;
@@ -179,10 +232,15 @@ function buildRolesModel(rows) {
     const date = parseMonthDay(label, YEAR);
     const roles = [];
     const speakers = [];
+    let theme = "", tq = [], themeSheetRow = null, tqSheetRow = null;
     let filled = 0, total = 0;
     const sheetCol = col + 1;
     fields.forEach(field => {
-      if (field.type === "person") {
+      if (field.type === "meta") {
+        const value = clean(field.row[col]);
+        if (field.key === "theme") { theme = value; themeSheetRow = field.sheetRow; }
+        else if (field.key === "tq") { tq = value.split("\n").map(clean).filter(Boolean); tqSheetRow = field.sheetRow; }
+      } else if (field.type === "person") {
         total += 1;
         const member = clean(field.row[col]);
         if (member) filled += 1;
@@ -206,7 +264,7 @@ function buildRolesModel(rows) {
         });
       }
     });
-    meetings.push({ col, label, date, roles, speakers, filled, total });
+    meetings.push({ col, label, date, roles, speakers, theme, tq, themeSheetRow, tqSheetRow, sheetCol, filled, total });
   }
 
   const today = todayKst();
@@ -266,15 +324,16 @@ function updateEditToggle() {
   if (!button) return;
   button.hidden = !editingAvailable();
   const unlocked = editingUnlocked();
-  button.textContent = unlocked ? "Lock editing" : "Edit roles";
+  button.textContent = unlocked ? "Lock editing" : "Edit fields";
   button.classList.toggle("is-active", unlocked);
 }
 
-function makeEditableField(currentValue, { row, col, placeholder = "Pending", onSaved }) {
+function makeEditableField(currentValue, { row, col, placeholder = "Pending", multiline = false, onSaved }) {
   const wrap = document.createElement("div");
   wrap.className = "editable-field";
-  const input = document.createElement("input");
-  input.type = "text";
+  const input = document.createElement(multiline ? "textarea" : "input");
+  if (!multiline) input.type = "text";
+  else input.rows = 3;
   input.value = currentValue || "";
   input.placeholder = placeholder;
   const status = document.createElement("span");
@@ -303,10 +362,36 @@ function makeEditableField(currentValue, { row, col, placeholder = "Pending", on
     }
   };
   input.addEventListener("blur", commit);
-  input.addEventListener("keydown", event => {
-    if (event.key === "Enter") { event.preventDefault(); input.blur(); }
-  });
+  if (!multiline) {
+    input.addEventListener("keydown", event => {
+      if (event.key === "Enter") { event.preventDefault(); input.blur(); }
+    });
+  }
   return wrap;
+}
+
+// ---- Club officers ----
+
+function buildOfficersModel(rows) {
+  let period = "";
+  const officers = [];
+  rows.forEach(row => {
+    const role = clean(row[0]);
+    const name = clean(row[1]);
+    if (!role && name) { period = name; return; }
+    if (role && name) officers.push({ role, name });
+  });
+  return { period, officers };
+}
+
+function renderOfficers(model) {
+  const card = document.getElementById("officersCard");
+  if (!model.officers.officers.length) { card.hidden = true; return; }
+  card.hidden = false;
+  setText("officersPeriod", model.officers.period || "Club Officers");
+  document.getElementById("officersList").innerHTML = model.officers.officers
+    .map(o => `<li><span>${escapeHtml(o.role)}</span><strong>${escapeHtml(o.name)}</strong></li>`)
+    .join("");
 }
 
 // ---- Tooltip helpers ----
@@ -390,50 +475,23 @@ function renderMeetingReadiness(meeting) {
   document.getElementById("readinessBar").style.width = `${percentage}%`;
 }
 
-function detailedAgenda(meeting) {
-  const roleMember = label => meeting.roles.find(r => r.label === label)?.member || "Pending";
-  const speakerRows = meeting.speakers.map(s => [s.project || "Pending", s.title || "Pending", s.member || "Pending", s.pathways || "Pending"]);
-  return [
-    { time: "09:50", title: "Icebreaking", owner: "Members & guests", bullets: [] },
-    { time: "10:00", title: "Introduction", owner: roleMember("Toastmasters"), bullets: ["Welcome & mission statement"] },
-    {
-      time: "10:20", title: "Prepared Speech Session", owner: roleMember("Toastmasters"),
-      table: { headers: ["Project", "Speech Title", "Speaker", "Pathway"], rows: speakerRows.length ? speakerRows : [["Pending", "Pending", "Pending", "Pending"]] },
-    },
-    {
-      time: "10:50", title: "Table Topics & Debate", owner: `${roleMember("Table Topics Master")} / ${roleMember("Debate Master")}`,
-      bullets: ["Impromptu speaking", "Debate round"],
-    },
-    { time: "11:10", title: "Break", owner: "", bullets: ["10 minutes"] },
-    {
-      time: "11:20", title: "Evaluation Session", owner: `${roleMember("Evaluator #1")} / ${roleMember("Evaluator #2")}`,
-      table: {
-        headers: ["Report", "Person"],
-        rows: [
-          ["Grammarian", roleMember("Grammarian")],
-          ["Timer", roleMember("Timer")],
-          ["Ah-counter", roleMember("Ah-counter")],
-          ["Quiz Master", roleMember("Quiz Master")],
-        ],
-      },
-    },
-    {
-      time: "11:55", title: "Announcements", owner: roleMember("Toastmasters"),
-      bullets: [`Word of the day: ${meeting.roles.find(r => r.label === "word of the day")?.value || "Pending"}`, `Quote of the day: ${meeting.roles.find(r => r.label === "quote of the day")?.value || "Pending"}`],
-    },
-    { time: "12:00", title: "Closing", owner: roleMember("Toastmasters"), bullets: ["Next meeting sign-up"] },
-  ];
-}
-function renderAgenda(meeting) {
-  const items = meeting ? detailedAgenda(meeting) : AGENDA_FALLBACK.map(([time, title, owner]) => ({ time, title, owner, bullets: [] }));
-  return items.map(item => {
-    const owner = item.owner ? ` <span class="agenda-owner">(${escapeHtml(item.owner)})</span>` : "";
-    const bullets = item.bullets?.length ? `<ul class="agenda-bullets">${item.bullets.map(b => `<li>${escapeHtml(b)}</li>`).join("")}</ul>` : "";
-    const table = item.table
-      ? `<div class="agenda-table-wrap"><table class="agenda-table"><thead><tr>${item.table.headers.map(h => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead><tbody>${item.table.rows.map(row => `<tr>${row.map(v => `<td class="${v === "Pending" ? "pending" : ""}">${escapeHtml(v)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`
-      : "";
-    return `<section class="agenda-detail-item"><div class="agenda-detail-heading"><time>${escapeHtml(item.time)}</time><h4>${escapeHtml(item.title)}${owner}</h4></div>${bullets}${table}</section>`;
-  }).join("");
+function renderAgendaTable() {
+  const rowsHtml = AGENDA_BLOCKS.map(block => block.rows.map(([segment, roleTaker], index) => {
+    const isBlockStart = index === 0;
+    const timeCell = isBlockStart ? `<td class="agenda-time" rowspan="${block.rows.length}">${escapeHtml(block.time)}</td>` : "";
+    const segmentText = isBlockStart && block.highlight
+      ? `<mark class="agenda-highlight">${escapeHtml(segment)}</mark>`
+      : escapeHtml(segment);
+    return `<tr class="${isBlockStart ? "agenda-block-start" : "agenda-sub-row"}">
+      ${timeCell}
+      <td class="${isBlockStart ? "agenda-segment" : "agenda-sub-segment"}">${segmentText}</td>
+      <td class="agenda-role-taker">${escapeHtml(roleTaker)}</td>
+    </tr>`;
+  }).join("")).join("");
+  return `<div class="agenda-table-wrap"><table class="agenda-standard-table">
+    <thead><tr><th>Time</th><th>Segment</th><th>Role taker</th></tr></thead>
+    <tbody>${rowsHtml}</tbody>
+  </table></div>`;
 }
 
 function renderMeeting(model) {
@@ -453,15 +511,67 @@ function renderMeeting(model) {
     document.getElementById("readinessBar").style.width = "0%";
     document.getElementById("weekAssignments").innerHTML = `<div class="empty-state">Add a column to the 2026 tab to populate this meeting.</div>`;
     document.getElementById("weekSpeeches").innerHTML = `<div class="empty-state">No prepared speeches assigned yet.</div>`;
-    document.getElementById("agendaTimeline").innerHTML = renderAgenda(null);
+    document.getElementById("agendaTimeline").innerHTML = renderAgendaTable();
+    document.getElementById("meetingThemeBanner").hidden = true;
     return;
   }
 
   setText("meetingTitle", meeting.date ? `${formatDate(meeting.date)} Meeting` : `${meeting.label} Meeting`);
   renderMeetingReadiness(meeting);
+  renderMeetingTheme(meeting);
   renderWeekAssignments(meeting);
   renderWeekSpeeches(meeting);
-  document.getElementById("agendaTimeline").innerHTML = renderAgenda(meeting);
+  document.getElementById("agendaTimeline").innerHTML = renderAgendaTable();
+}
+
+function renderMeetingTheme(meeting) {
+  const banner = document.getElementById("meetingThemeBanner");
+  banner.hidden = false;
+  const editing = editingAvailable() && editingUnlocked();
+
+  const themeContainer = document.getElementById("meetingThemeText");
+  themeContainer.innerHTML = "";
+  if (editing && meeting.themeSheetRow) {
+    themeContainer.appendChild(makeEditableField(meeting.theme, {
+      row: meeting.themeSheetRow, col: meeting.sheetCol,
+      onSaved: next => { meeting.theme = next; },
+    }));
+  } else if (editing) {
+    themeContainer.innerHTML = `<span class="pending">Add a "Theme" row to the 2026 tab to make this editable.</span>`;
+  } else {
+    themeContainer.textContent = meeting.theme || "Pending";
+    themeContainer.classList.toggle("pending", !meeting.theme);
+  }
+
+  const tqContainer = document.getElementById("meetingTqList");
+  tqContainer.innerHTML = "";
+  if (editing && meeting.tqSheetRow) {
+    tqContainer.appendChild(makeEditableField(meeting.tq.join("\n"), {
+      row: meeting.tqSheetRow, col: meeting.sheetCol, multiline: true, placeholder: "One question per line",
+      onSaved: next => { meeting.tq = next.split("\n").map(clean).filter(Boolean); },
+    }));
+  } else if (editing) {
+    tqContainer.innerHTML = `<span class="pending">Add a "TQ" row to the 2026 tab to make this editable.</span>`;
+  } else {
+    tqContainer.innerHTML = meeting.tq.length
+      ? `<ul>${meeting.tq.map(q => `<li>${escapeHtml(q)}</li>`).join("")}</ul>`
+      : `<span class="pending">Pending</span>`;
+  }
+
+  const wodContainer = document.getElementById("meetingWodText");
+  wodContainer.innerHTML = "";
+  const wodRole = meeting.roles.find(r => r.label.toLowerCase() === "word of the day");
+  if (editing && wodRole) {
+    wodContainer.appendChild(makeEditableField(wodRole.value, {
+      row: wodRole.sheetRow, col: wodRole.sheetCol,
+      onSaved: next => { wodRole.value = next; recomputeReadiness(meeting); },
+    }));
+  } else if (editing) {
+    wodContainer.innerHTML = `<span class="pending">Add a "word of the day" row to the 2026 tab to make this editable.</span>`;
+  } else {
+    wodContainer.textContent = wodRole?.value || "Pending";
+    wodContainer.classList.toggle("pending", !wodRole?.value);
+  }
 }
 
 function recomputeReadiness(meeting) {
@@ -476,7 +586,8 @@ function renderWeekAssignments(meeting) {
   const container = document.getElementById("weekAssignments");
   container.innerHTML = "";
   const editing = editingAvailable() && editingUnlocked();
-  meeting.roles.forEach(r => {
+  const hiddenLabels = new Set(["word of the day", "quote of the day"]);
+  meeting.roles.filter(r => !hiddenLabels.has(r.label.toLowerCase())).forEach(r => {
     const cell = document.createElement("div");
     const value = r.isText ? r.value : r.member;
     cell.className = `assignment ${value ? "" : "pending"}`;
@@ -673,6 +784,7 @@ function render(model, meta) {
   setText("metricMeetings", model.roles.meetings.length);
 
   renderNotices(model);
+  renderOfficers(model);
   renderFilters(model);
   renderPipeline(model);
 
@@ -696,7 +808,8 @@ async function loadData(force = false) {
     const meta = await fetchPublicSheets();
     const schedule = buildScheduleModel(parseCsv(meta.scheduleCsv));
     const roles = buildRolesModel(parseCsv(meta.rolesCsv));
-    state.model = { schedule, roles };
+    const officers = buildOfficersModel(parseCsv(meta.officersCsv));
+    state.model = { schedule, roles, officers };
     render(state.model, meta);
     banner.hidden = true;
   } catch (error) {

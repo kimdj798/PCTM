@@ -14,9 +14,12 @@
           <span class="brand-mark">PC<em>TM</em></span>
           <span class="brand-sub">Speech &amp; Role Dashboard</span>
         </a>
-        <button id="refreshButton" class="refresh-button" type="button" aria-label="Refresh from Google Sheet">
-          <span aria-hidden="true">&#8635;</span> Refresh
-        </button>
+        <div class="topbar-right">
+          <img class="tm-logo" src="./toastmasters-log.jpeg" alt="Toastmasters International" />
+          <button id="refreshButton" class="refresh-button" type="button" aria-label="Refresh from Google Sheet">
+            <span aria-hidden="true">&#8635;</span> Refresh
+          </button>
+        </div>
       </header>
 
       <main id="top">
@@ -24,12 +27,16 @@
           <div class="hero-copy">
             <p class="eyebrow">2026 CLUB SCHEDULE</p>
             <h1>Every speech<br /><em>moves us forward.</em></h1>
-            <p class="hero-sub">Track who's speaking, what they're working on, and what each meeting still needs &mdash; live from the club sheet.</p>
+            <p class="hero-sub">We provide a supportive and positive learning experience in which members are empowered to develop communication and leadership skills, resulting in greater self-confidence and personal growth.</p>
             <div id="noticeRow" class="notice-row"></div>
           </div>
           <div class="hero-meta">
             <div><span>AS OF</span><strong id="asOfDate">&mdash;</strong></div>
             <div><span>DATA SOURCE</span><strong>LIVE GOOGLE SHEET</strong></div>
+            <div id="officersCard" class="officers-card" hidden>
+              <p class="officers-period" id="officersPeriod"></p>
+              <ul id="officersList" class="officers-list"></ul>
+            </div>
           </div>
         </section>
 
@@ -53,13 +60,18 @@
             <div>
               <p class="eyebrow">MEETING ROLES</p>
               <h2 id="meetingTitle">Loading meeting date</h2>
-              <button id="editToggleButton" class="edit-toggle-button" type="button" hidden>Edit roles</button>
+              <button id="editToggleButton" class="edit-toggle-button" type="button" hidden>Edit fields</button>
             </div>
             <div id="meetingReadiness" class="meeting-readiness needs-attention" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Open meeting readiness details">
               <div class="readiness-heading"><span id="readinessStatus">Checking readiness</span><strong id="readinessScore">0% (0/19)</strong></div>
               <div class="readiness-track" role="progressbar" aria-label="Meeting readiness" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="readinessBar"></span></div>
               <p id="readinessMissing" class="readiness-missing">Checking required fields.</p>
             </div>
+          </div>
+          <div id="meetingThemeBanner" class="meeting-theme-banner" hidden>
+            <div class="theme-line"><span>THEME</span><div id="meetingThemeText" class="theme-value"></div></div>
+            <div class="tq-line"><span>TQ</span><div id="meetingTqList" class="tq-value"></div></div>
+            <div class="wod-line"><span>WOD</span><div id="meetingWodText" class="wod-value"></div></div>
           </div>
           <div class="week-stack">
             <article class="panel assignments-panel">

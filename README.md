@@ -31,10 +31,21 @@ endpoint), so no server or API key is required once deployed.
   the day, Timer, Ah-counter). This powers the meeting readiness view. Add a
   new column with a date label (e.g. `Sep 5`) to schedule another meeting —
   the dashboard picks it up automatically.
+- **Theme / TQ** (optional rows on the `2026` tab): add a row labeled `Theme`
+  and a row labeled `TQ` (case-insensitive) anywhere in column A, with the
+  meeting's theme and theme questions in that meeting's column. For `TQ`,
+  put each question on its own line within the cell (Alt+Enter in Google
+  Sheets) — the dashboard splits on line breaks into a bulleted list. These
+  two rows don't count toward the readiness score; they just show as a
+  banner at the top of the Meeting Roles section, "Pending" until filled in.
+- **`ClubOfficers` tab** (`gid=2126938942`): two columns, no header — an
+  optional first row with a blank column A and a period label in column B
+  (e.g. `Second half of 2026`), then one `Role, Name` row per officer. Shown
+  as a card in the top-right of the hero. Edit the sheet directly to update
+  it; it isn't editable from the dashboard's Edit fields mode.
 
-There's no source agenda-with-times tab yet, so the "Standard agenda" panel
-uses a generic Toastmasters meeting template filled in with whichever roles
-are assigned for the selected meeting.
+The "Standard agenda" panel is a fixed template matching PCTM's printed
+agenda sheet (Time / Segment / Role taker) — it isn't sourced from the Sheet.
 
 ## Refresh behavior
 
