@@ -23,31 +23,12 @@
       </header>
 
       <main id="top">
-        <section class="hero">
-          <div class="hero-copy">
-            <p class="eyebrow">2026 CLUB SCHEDULE</p>
-            <h1>Every speech<br /><em>moves us forward.</em></h1>
-            <p class="hero-sub">We provide a supportive and positive learning experience in which members are empowered to develop communication and leadership skills, resulting in greater self-confidence and personal growth.</p>
-            <div id="noticeRow" class="notice-row"></div>
-          </div>
-          <div class="hero-meta">
-            <div><span>AS OF</span><strong id="asOfDate">&mdash;</strong></div>
-            <div><span>DATA SOURCE</span><strong>LIVE GOOGLE SHEET</strong></div>
-            <div id="officersCard" class="officers-card" hidden>
-              <p class="officers-period" id="officersPeriod"></p>
-              <ul id="officersList" class="officers-list"></ul>
-            </div>
-          </div>
+        <section class="hero hero-solo">
+          <p class="eyebrow">2026 CLUB SCHEDULE</p>
+          <h1>Every speech <em>moves us forward.</em></h1>
         </section>
 
         <div id="statusBanner" class="status-banner" role="status">Loading the latest data from Google Sheets.</div>
-
-        <section class="metric-strip" aria-label="Key metrics">
-          <article class="metric-card accent-blue"><span>COMPLETED SPEECHES</span><strong id="metricCompleted">&mdash;</strong><small>Delivered so far</small></article>
-          <article class="metric-card accent-orange"><span>UPCOMING SPEECHES</span><strong id="metricUpcoming">&mdash;</strong><small>Planned Jul&ndash;Dec</small></article>
-          <article class="metric-card accent-aqua"><span>ACTIVE SPEAKERS</span><strong id="metricSpeakers">&mdash;</strong><small>In the pipeline</small></article>
-          <article class="metric-card accent-yellow"><span>MEETINGS LOGGED</span><strong id="metricMeetings">&mdash;</strong><small>Role sheet columns</small></article>
-        </section>
 
         <nav class="dashboard-tabs" aria-label="Meeting views" role="tablist">
           <button type="button" role="tab" data-dashboard-tab="past" aria-selected="false">Past Meeting</button>
@@ -82,11 +63,31 @@
               <div class="panel-title"><h3>Prepared speeches</h3><span>Click for details</span></div>
               <div id="weekSpeeches" class="week-speeches"></div>
             </article>
-            <article class="panel agenda-panel">
-              <div class="panel-title"><h3>Standard agenda</h3><span>General template</span></div>
-              <div id="agendaTimeline" class="agenda-timeline"></div>
-            </article>
           </div>
+        </section>
+
+        <section class="dashboard-section notices-section" id="notices">
+          <div class="section-heading">
+            <div><p class="eyebrow">NOTICES</p><h2>Club-wide notices</h2></div>
+          </div>
+          <div id="noticeRow" class="notice-row"></div>
+        </section>
+
+        <section class="dashboard-section" id="agenda">
+          <div class="section-heading">
+            <div><p class="eyebrow">AGENDA</p><h2>Standard meeting agenda</h2></div>
+          </div>
+          <article class="panel agenda-panel">
+            <div class="panel-title"><h3>Standard agenda</h3><span>General template</span></div>
+            <div id="agendaTimeline" class="agenda-timeline"></div>
+          </article>
+        </section>
+
+        <section class="metric-strip" aria-label="Key metrics">
+          <article class="metric-card accent-blue"><span>COMPLETED SPEECHES</span><strong id="metricCompleted">&mdash;</strong><small>Delivered so far</small></article>
+          <article class="metric-card accent-orange"><span>UPCOMING SPEECHES</span><strong id="metricUpcoming">&mdash;</strong><small>Planned Jul&ndash;Dec</small></article>
+          <article class="metric-card accent-aqua"><span>ACTIVE SPEAKERS</span><strong id="metricSpeakers">&mdash;</strong><small>In the pipeline</small></article>
+          <article class="metric-card accent-yellow"><span>MEETINGS LOGGED</span><strong id="metricMeetings">&mdash;</strong><small>Role sheet columns</small></article>
         </section>
 
         <section class="dashboard-section pipeline-section" id="pipeline">
@@ -115,6 +116,29 @@
             <div class="panel-title"><h3>Timeline</h3><span id="timelineCount">&mdash;</span></div>
             <div id="speechTimeline" class="speech-timeline"></div>
           </article>
+        </section>
+
+        <section class="dashboard-section club-info-section" id="club-info">
+          <div class="section-heading">
+            <div><p class="eyebrow">ABOUT</p><h2>Club info</h2></div>
+          </div>
+          <div class="club-info-grid">
+            <div class="club-info-meta">
+              <div><span>AS OF</span><strong id="asOfDate">&mdash;</strong></div>
+              <div><span>DATA SOURCE</span><strong>LIVE GOOGLE SHEET</strong></div>
+            </div>
+            <div id="officersCard" class="officers-card" hidden>
+              <p class="officers-period" id="officersPeriod"></p>
+              <ul id="officersList" class="officers-list"></ul>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-section mission-section" id="mission">
+          <div class="section-heading">
+            <div><p class="eyebrow">CLUB MISSION</p><h2>What PCTM stands for</h2></div>
+          </div>
+          <p class="mission-text">We provide a supportive and positive learning experience in which members are empowered to develop communication and leadership skills, resulting in greater self-confidence and personal growth.</p>
         </section>
       </main>
 
