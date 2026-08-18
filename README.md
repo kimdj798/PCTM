@@ -63,7 +63,7 @@ agenda sheet (Time / Segment / Role taker) — it isn't sourced from the Sheet.
 
 The public `gviz` CSV endpoint used to *read* the sheet is read-only, so
 writing role assignments back requires a small Apps Script Web App deployed
-inside the Sheet itself. Once set up, an **Edit roles** button appears next
+inside the Sheet itself. Once set up, an **Edit fields** button appears next
 to the Meeting Roles heading; anyone with the shared password can edit role
 assignments and speaker details inline, and changes save straight to the
 `2026` tab.
@@ -87,7 +87,7 @@ assignments and speaker details inline, and changes save straight to the
 ### 2. Point the dashboard at it
 
 Set `EDIT_ENDPOINT` near the top of [`public/app.js`](public/app.js) to the
-Web app URL from step 5, then redeploy (push to `main`). The **Edit roles**
+Web app URL from step 5, then redeploy (push to `main`). The **Edit fields**
 button stays hidden until this is set.
 
 ### Notes
@@ -98,3 +98,13 @@ button stays hidden until this is set.
 - Only fields on the `2026` roles tab are editable (role assignments,
   speaker title/pathway/project). The speech schedule tab is read-only from
   the dashboard.
+
+## Exporting a meeting summary
+
+The **Export** button next to Edit fields (Meeting Roles heading) generates a
+KakaoTalk-ready text summary of the selected meeting — date, Toastmaster/
+Table Topics/Debate/Quiz Master, Grammarian/Timer/Ah Counter, and both
+Speaker/Evaluator pairs — and opens it in a dialog with a **Copy to
+clipboard** button. Paste directly into a group chat. Only available when a
+real meeting exists in the `2026` tab (not the Speech Pipeline preview
+shown for meetings that haven't been added yet).

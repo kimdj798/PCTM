@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="PCTM speech pipeline and meeting role dashboard" />
     <title>PCTM Dashboard</title>
-    <link rel="stylesheet" href="./styles.css?v=2" />
+    <link rel="stylesheet" href="./styles.css?v=3" />
   </head>
   <body>
     <div class="page-shell">
@@ -41,7 +41,10 @@
             <div>
               <p class="eyebrow">MEETING ROLES</p>
               <h2 id="meetingTitle">Loading meeting date</h2>
-              <button id="editToggleButton" class="edit-toggle-button" type="button" hidden>Edit fields</button>
+              <div class="meeting-actions">
+                <button id="editToggleButton" class="edit-toggle-button" type="button" hidden>Edit fields</button>
+                <button id="exportButton" class="export-button" type="button" hidden>Export</button>
+              </div>
             </div>
             <div id="meetingReadiness" class="meeting-readiness needs-attention" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Open meeting readiness details">
               <div class="readiness-heading"><span id="readinessStatus">Checking readiness</span><strong id="readinessScore">0% (0/9)</strong></div>
@@ -175,7 +178,20 @@
         <button type="submit" class="edit-unlock-submit">Unlock</button>
       </form>
     </dialog>
+    <dialog id="exportDialog" class="missing-dialog export-dialog" aria-labelledby="exportDialogTitle">
+      <div class="missing-dialog-heading">
+        <div><p>MEETING ROLES</p><h2 id="exportDialogTitle">Export meeting summary</h2></div>
+        <button type="button" id="closeExportDialog" class="dialog-close" aria-label="Close export">&times;</button>
+      </div>
+      <div class="export-dialog-body">
+        <textarea id="exportText" class="export-textarea" readonly rows="16"></textarea>
+        <div class="export-dialog-actions">
+          <span id="exportCopyStatus" class="export-copy-status"></span>
+          <button type="button" id="exportCopyButton" class="export-copy-button">Copy to clipboard</button>
+        </div>
+      </div>
+    </dialog>
     <div id="tooltip" class="tooltip" role="tooltip" aria-hidden="true"></div>
-    <script src="./app.js?v=2" defer></script>
+    <script src="./app.js?v=3" defer></script>
   </body>
 </html>

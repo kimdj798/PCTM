@@ -1,4 +1,4 @@
-const state = { model: null, member: "all", meetingView: "coming", editing: false };
+const state = { model: null, member: "all", meetingView: "coming", editing: false, currentMeeting: null };
 const SHEET_ID = "1MYHmvO0-doUTvsIXvErfydb1wke_tQ_vCrZOk2CorN4";
 const SCHEDULE_GID = "1701553634";
 const ROLES_GID = "1141924141";
@@ -525,6 +525,8 @@ function renderMeeting(model) {
     document.getElementById("weekAssignments").innerHTML = `<div class="empty-state">Add a column to the 2026 tab to populate this meeting.</div>`;
     document.getElementById("agendaTimeline").innerHTML = renderAgendaTable();
     document.getElementById("meetingThemeBanner").hidden = true;
+    document.getElementById("exportButton").hidden = true;
+    state.currentMeeting = null;
 
     if (preview) {
       setText("meetingTitle", `${preview.label} (from Speech Pipeline)`);
@@ -547,6 +549,64 @@ function renderMeeting(model) {
   renderWeekAssignments(meeting);
   renderWeekSpeeches(meeting);
   document.getElementById("agendaTimeline").innerHTML = renderAgendaTable();
+  document.getElementById("exportButton").hidden = false;
+  state.currentMeeting = meeting;
+}
+
+// ---- Export ----
+
+function formatExportDate(meeting) {
+  if (!meeting.date) return meeting.label;
+  const monthDay = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Seoul", month: "long", day: "numeric" }).format(meeting.date);
+  const weekday = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Seoul", weekday: "long" }).format(meeting.date);
+  return `${monthDay} (${weekday})`;
+}
+
+function buildExportText(meeting) {
+  const roleValue = label => meeting.roles.find(r => r.label === label)?.member || "";
+  const speakerValue = label => meeting.speakers.find(s => s.label === label)?.member || "";
+  const debate = roleValue("Debate Master");
+
+  return [
+    `Date: ${formatExportDate(meeting)} at 10:00`,
+    "",
+    `🍋 Toastmaster : ${roleValue("Toastmasters")}`,
+    `🍋 Table Topics Master : ${roleValue("Table Topics Master")}`,
+    `🍋 Debate Master : ${debate}${debate ? " " : ""}(연설1,2과 평가1,2가 차면 토론은 자동 취소됩니다)`,
+    `🍋 Quiz Master : ${roleValue("Quiz Master")}`,
+    `🟩 Grammarian : ${roleValue("Grammarian")}`,
+    `🟩 Timer : ${roleValue("Timer")}`,
+    `🟩 Ah Counter : ${roleValue("Ah-counter")}`,
+    "",
+    `🫐 Speaker #1 : ${speakerValue("Speaker #1")}`,
+    `🫐 Evaluator #1 : ${roleValue("Evaluator #1")}`,
+    `🫐 Speaker #2 : ${speakerValue("Speaker #2")}`,
+    `🫐 Evaluator #2 : ${roleValue("Evaluator #2")}`,
+  ].join("\n");
+}
+
+function openExportDialog() {
+  if (!state.currentMeeting) return;
+  const textarea = document.getElementById("exportText");
+  textarea.value = buildExportText(state.currentMeeting);
+  document.getElementById("exportCopyStatus").textContent = "";
+  document.getElementById("exportDialog").showModal();
+  textarea.focus();
+  textarea.select();
+}
+
+async function copyExportText() {
+  const textarea = document.getElementById("exportText");
+  const status = document.getElementById("exportCopyStatus");
+  try {
+    await navigator.clipboard.writeText(textarea.value);
+    status.textContent = "Copied!";
+  } catch (error) {
+    textarea.focus();
+    textarea.select();
+    const ok = document.execCommand("copy");
+    status.textContent = ok ? "Copied!" : "Select the text above and copy manually.";
+  }
 }
 
 function renderMeetingTheme(meeting) {
@@ -895,6 +955,10 @@ function bindEvents() {
       submitButton.disabled = false;
     }
   });
+
+  document.getElementById("exportButton").addEventListener("click", openExportDialog);
+  document.getElementById("closeExportDialog").addEventListener("click", () => document.getElementById("exportDialog").close());
+  document.getElementById("exportCopyButton").addEventListener("click", copyExportText);
 }
 
 bindEvents();

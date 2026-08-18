@@ -354,8 +354,8 @@ a { color: inherit; }
 .week-speech .speech-edit-row span { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
 
 /* Edit toggle + inline field editing */
-.edit-toggle-button {
-  margin-top: 8px;
+.meeting-actions { display: flex; gap: 8px; margin-top: 8px; }
+.edit-toggle-button, .export-button {
   display: inline-flex;
   align-items: center;
   padding: 6px 12px;
@@ -368,6 +368,28 @@ a { color: inherit; }
   cursor: pointer;
 }
 .edit-toggle-button.is-active { background: var(--series-1); color: #ffffff; }
+.export-button { border-color: var(--series-3); color: var(--series-3); }
+.export-button:hover { background: color-mix(in srgb, var(--series-3) 12%, transparent); }
+
+/* Export dialog */
+.export-dialog { max-width: 560px; }
+.export-dialog-body { padding: 8px 20px 20px; display: flex; flex-direction: column; gap: 10px; }
+.export-textarea {
+  width: 100%;
+  font: 13px/1.6 ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--page);
+  color: var(--text-primary);
+  resize: vertical;
+}
+.export-dialog-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+.export-copy-status { font-size: 12.5px; font-weight: 600; color: var(--good); }
+.export-copy-button {
+  padding: 10px 16px; border-radius: 999px; border: none;
+  background: var(--series-3); color: #ffffff; font-weight: 700; font-size: 14px; cursor: pointer;
+}
 
 .editable-field { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
 .editable-field:has(textarea) { align-items: flex-start; }
