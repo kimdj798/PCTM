@@ -509,7 +509,14 @@ dialog::backdrop { background: rgba(11, 11, 11, 0.5); }
 .missing-dialog-heading { display: flex; justify-content: space-between; align-items: flex-start; padding: 18px 20px 0; }
 .missing-dialog-heading p { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: var(--text-muted); }
 .missing-dialog-heading h2 { margin: 4px 0 0; font-size: 18px; }
-.dialog-close { border: none; background: none; font-size: 20px; cursor: pointer; color: var(--text-muted); line-height: 1; }
+.dialog-close {
+  flex-shrink: 0;
+  width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: none; border-radius: 8px; background: none;
+  font-size: 20px; line-height: 1; cursor: pointer; color: var(--text-muted);
+}
+.dialog-close:hover { background: var(--page); color: var(--text-primary); }
 .missing-dialog-summary { padding: 8px 20px 0; font-size: 13px; color: var(--text-secondary); }
 .missing-dialog-list { padding: 10px 20px 20px 36px; margin: 0; font-size: 13px; color: var(--text-secondary); }
 .speech-dialog-details { padding: 8px 20px 20px; display: flex; flex-direction: column; gap: 10px; }
@@ -534,9 +541,10 @@ dialog::backdrop { background: rgba(11, 11, 11, 0.5); }
 }
 
 /* Printable agenda sheet — same look on screen (preview) and on paper */
-.print-preview-dialog { max-width: 900px; width: 92vw; max-height: 88vh; padding: 0; display: flex; flex-direction: column; }
-.print-preview-heading { flex: 0 0 auto; }
-.print-preview-actions { display: flex; align-items: center; gap: 12px; }
+.print-preview-dialog { max-width: 900px; width: 92vw; max-height: 88vh; padding: 0; }
+.print-preview-dialog[open] { display: flex; flex-direction: column; }
+.print-preview-heading { flex: 0 0 auto; flex-wrap: wrap; row-gap: 8px; }
+.print-preview-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 .print-preview-scroll { overflow-y: auto; padding: 0 24px 24px; }
 
 .print-agenda {

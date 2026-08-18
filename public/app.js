@@ -657,13 +657,17 @@ function buildPrintAgendaHtml(meeting, model) {
     </div>
     <div class="print-columns">
       <div class="print-col print-col-main">
-        <h3>Club Officers:</h3>
-        <table class="print-kv"><tbody>${officersRows}</tbody></table>
         <h3>Club Mission:</h3>
         <p class="print-mission">${escapeHtml(missionText)}</p>
         ${renderAgendaTable()}
+        <h3>Theme: ${escapeHtml(meeting.theme || "TBD")}</h3>
+        <p><strong>TQ:</strong></p>
+        <ul>${meeting.tq.length ? meeting.tq.map(q => `<li>${escapeHtml(q)}</li>`).join("") : "<li>TBD</li>"}</ul>
+        <p><strong>WOD:</strong> ${escapeHtml(wodRole?.value || "TBD")}</p>
       </div>
       <div class="print-col print-col-side">
+        <h3>Club Officers:</h3>
+        <table class="print-kv"><tbody>${officersRows}</tbody></table>
         <h3>Speech Time</h3>
         <table class="print-speech-time">
           <thead><tr><th>Kind of speech</th><th>Green</th><th>Yellow</th><th>Red</th></tr></thead>
@@ -671,10 +675,6 @@ function buildPrintAgendaHtml(meeting, model) {
         </table>
         <h3>Club Business</h3>
         <p>1. Next meeting date : ${escapeHtml(findNextMeetingDate(meeting, model))}</p>
-        <h3>Theme: ${escapeHtml(meeting.theme || "TBD")}</h3>
-        <p><strong>TQ:</strong></p>
-        <ul>${meeting.tq.length ? meeting.tq.map(q => `<li>${escapeHtml(q)}</li>`).join("") : "<li>TBD</li>"}</ul>
-        <p><strong>WOD:</strong> ${escapeHtml(wodRole?.value || "TBD")}</p>
         <h3>Speech information</h3>
         <table class="print-speech-info">
           <thead><tr><th>#</th><th>Name</th><th>Title</th><th>Pathways Project</th><th>Evaluator</th></tr></thead>
