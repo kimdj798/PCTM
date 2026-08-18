@@ -355,7 +355,7 @@ a { color: inherit; }
 
 /* Edit toggle + inline field editing */
 .meeting-actions { display: flex; gap: 8px; margin-top: 8px; }
-.edit-toggle-button, .export-button {
+.edit-toggle-button, .export-button, .print-button {
   display: inline-flex;
   align-items: center;
   padding: 6px 12px;
@@ -370,6 +370,8 @@ a { color: inherit; }
 .edit-toggle-button.is-active { background: var(--series-1); color: #ffffff; }
 .export-button { border-color: var(--series-3); color: var(--series-3); }
 .export-button:hover { background: color-mix(in srgb, var(--series-3) 12%, transparent); }
+.print-button { border-color: var(--series-7); color: var(--series-7); }
+.print-button:hover { background: color-mix(in srgb, var(--series-7) 12%, transparent); }
 
 /* Export dialog */
 .export-dialog { max-width: 560px; }
@@ -529,4 +531,44 @@ dialog::backdrop { background: rgba(11, 11, 11, 0.5); }
   .week-stack { grid-template-columns: 1fr; }
   .pipeline-section .two-column { grid-template-columns: 1fr; }
   .assignment-grid { grid-template-columns: 1fr; }
+}
+
+/* Printable agenda sheet — same look on screen (preview) and on paper */
+.print-preview-dialog { max-width: 900px; width: 92vw; max-height: 88vh; padding: 0; display: flex; flex-direction: column; }
+.print-preview-heading { flex: 0 0 auto; }
+.print-preview-actions { display: flex; align-items: center; gap: 12px; }
+.print-preview-scroll { overflow-y: auto; padding: 0 24px 24px; }
+
+.print-agenda {
+  color: #0b0b0b; background: #ffffff; font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.print-dashboard-url { margin: 0 0 10px; font-size: 11px; color: #52514e; }
+.print-header { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+.print-logo { width: 64px; height: auto; }
+.print-header h1 { margin: 0; font-size: 22px; }
+.print-header h2 { margin: 2px 0 0; font-size: 14px; font-weight: 600; color: #52514e; }
+.print-columns { display: flex; gap: 28px; align-items: flex-start; }
+.print-col-main { flex: 1.4; }
+.print-col-side { flex: 1; }
+.print-agenda h3 { font-size: 13px; margin: 16px 0 6px; }
+.print-agenda h3:first-of-type { margin-top: 0; }
+.print-mission { font-size: 12px; line-height: 1.5; color: #333; margin: 0 0 4px; }
+.print-kv, .print-speech-time, .print-speech-info { width: 100%; border-collapse: collapse; font-size: 11px; }
+.print-kv td, .print-speech-time th, .print-speech-time td, .print-speech-info th, .print-speech-info td {
+  padding: 3px 6px; border: 1px solid #ccc; text-align: left;
+}
+.print-agenda .agenda-standard-table { font-size: 10.5px; }
+.print-agenda .agenda-standard-table th, .print-agenda .agenda-standard-table td { padding: 3px 6px; border: 1px solid #ccc; }
+.print-agenda .agenda-highlight { background: #fde68a; }
+.print-agenda ul { margin: 4px 0; padding-left: 16px; font-size: 11px; }
+
+@media print {
+  body * { visibility: hidden; }
+  .print-preview-dialog[open], .print-preview-dialog[open] * { visibility: visible; }
+  .print-preview-dialog[open] {
+    position: absolute; inset: 0; max-width: none; width: 100%; max-height: none; border: none; box-shadow: none;
+  }
+  .print-preview-heading, .print-preview-actions { display: none; }
+  .print-preview-scroll { overflow: visible; padding: 0; }
 }

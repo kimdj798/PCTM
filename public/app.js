@@ -4,6 +4,7 @@ const SCHEDULE_GID = "1701553634";
 const ROLES_GID = "1141924141";
 const OFFICERS_GID = "2126938942";
 const SHEET_SOURCE = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit?gid=${SCHEDULE_GID}`;
+const DASHBOARD_URL = "https://kimdj798.github.io/PCTM/";
 const YEAR = 2026;
 
 // Set this to your deployed Apps Script Web App URL (see README) to enable
@@ -526,6 +527,7 @@ function renderMeeting(model) {
     document.getElementById("agendaTimeline").innerHTML = renderAgendaTable();
     document.getElementById("meetingThemeBanner").hidden = true;
     document.getElementById("exportButton").hidden = true;
+    document.getElementById("printButton").hidden = true;
     state.currentMeeting = null;
 
     if (preview) {
@@ -550,6 +552,7 @@ function renderMeeting(model) {
   renderWeekSpeeches(meeting);
   document.getElementById("agendaTimeline").innerHTML = renderAgendaTable();
   document.getElementById("exportButton").hidden = false;
+  document.getElementById("printButton").hidden = false;
   state.currentMeeting = meeting;
 }
 
@@ -568,6 +571,8 @@ function buildExportText(meeting) {
   const debate = roleValue("Debate Master");
 
   return [
+    DASHBOARD_URL,
+    "",
     `Date: ${formatExportDate(meeting)} at 10:00`,
     "",
     `🍋 Toastmaster : ${roleValue("Toastmasters")}`,
@@ -607,6 +612,83 @@ async function copyExportText() {
     const ok = document.execCommand("copy");
     status.textContent = ok ? "Copied!" : "Select the text above and copy manually.";
   }
+}
+
+// ---- Printable agenda sheet ----
+
+const SPEECH_TIME_TABLE = [
+  ["Table Topics speech", "1:00", "1:30", "2:00"],
+  ["Prepared speech", "5:00", "6:00", "7:00"],
+  ["Debate speech", "1:00", "1:30", "2:00"],
+  ["Speech Evaluation", "2:00", "2:30", "3:00"],
+];
+
+function findNextMeetingDate(meeting, model) {
+  const dated = model.roles.meetings.filter(m => m.date).sort((a, b) => a.date - b.date);
+  const idx = dated.findIndex(m => m.col === meeting.col);
+  const next = idx >= 0 ? dated[idx + 1] : null;
+  return next ? formatDate(next.date, { year: "numeric" }) : "TBD";
+}
+
+function buildPrintAgendaHtml(meeting, model) {
+  const dateStr = meeting.date
+    ? new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Seoul", month: "long", day: "numeric", year: "numeric" }).format(meeting.date)
+    : meeting.label;
+  const officersRows = model.officers.officers
+    .map(o => `<tr><td>${escapeHtml(o.role)}</td><td>${escapeHtml(o.name)}</td></tr>`).join("");
+  const missionText = document.querySelector(".mission-text")?.textContent.trim() || "";
+  const wodRole = meeting.roles.find(r => r.label.toLowerCase() === "word of the day");
+  const speechTimeRows = SPEECH_TIME_TABLE
+    .map(([kind, g, y, r]) => `<tr><td>${kind}</td><td>${g}</td><td>${y}</td><td>${r}</td></tr>`).join("");
+  const speakerRows = meeting.speakers.map((s, i) => {
+    const evaluator = meeting.roles.find(r => r.label === `Evaluator #${i + 1}`)?.member || "";
+    const pathwaysProject = [s.pathways, s.project].filter(Boolean).join(" — ");
+    return `<tr><td>${i + 1}</td><td>${escapeHtml(s.member)}</td><td>${escapeHtml(s.title)}</td><td>${escapeHtml(pathwaysProject)}</td><td>${escapeHtml(evaluator)}</td></tr>`;
+  }).join("");
+
+  return `
+    <p class="print-dashboard-url">${escapeHtml(DASHBOARD_URL)}</p>
+    <div class="print-header">
+      <img src="./toastmasters-log.jpeg" class="print-logo" alt="" />
+      <div>
+        <h1>Pyeong-chon Toastmasters</h1>
+        <h2>Meeting Agenda &nbsp; ${escapeHtml(dateStr)}</h2>
+      </div>
+    </div>
+    <div class="print-columns">
+      <div class="print-col print-col-main">
+        <h3>Club Officers:</h3>
+        <table class="print-kv"><tbody>${officersRows}</tbody></table>
+        <h3>Club Mission:</h3>
+        <p class="print-mission">${escapeHtml(missionText)}</p>
+        ${renderAgendaTable()}
+      </div>
+      <div class="print-col print-col-side">
+        <h3>Speech Time</h3>
+        <table class="print-speech-time">
+          <thead><tr><th>Kind of speech</th><th>Green</th><th>Yellow</th><th>Red</th></tr></thead>
+          <tbody>${speechTimeRows}</tbody>
+        </table>
+        <h3>Club Business</h3>
+        <p>1. Next meeting date : ${escapeHtml(findNextMeetingDate(meeting, model))}</p>
+        <h3>Theme: ${escapeHtml(meeting.theme || "TBD")}</h3>
+        <p><strong>TQ:</strong></p>
+        <ul>${meeting.tq.length ? meeting.tq.map(q => `<li>${escapeHtml(q)}</li>`).join("") : "<li>TBD</li>"}</ul>
+        <p><strong>WOD:</strong> ${escapeHtml(wodRole?.value || "TBD")}</p>
+        <h3>Speech information</h3>
+        <table class="print-speech-info">
+          <thead><tr><th>#</th><th>Name</th><th>Title</th><th>Pathways Project</th><th>Evaluator</th></tr></thead>
+          <tbody>${speakerRows || `<tr><td colspan="5">TBD</td></tr>`}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function openPrintPreview() {
+  if (!state.currentMeeting || !state.model) return;
+  document.getElementById("printAgenda").innerHTML = buildPrintAgendaHtml(state.currentMeeting, state.model);
+  const dialog = document.getElementById("printPreviewDialog");
+  if (!dialog.open) dialog.showModal();
 }
 
 function renderMeetingTheme(meeting) {
@@ -959,6 +1041,13 @@ function bindEvents() {
   document.getElementById("exportButton").addEventListener("click", openExportDialog);
   document.getElementById("closeExportDialog").addEventListener("click", () => document.getElementById("exportDialog").close());
   document.getElementById("exportCopyButton").addEventListener("click", copyExportText);
+  document.getElementById("printButton").addEventListener("click", openPrintPreview);
+  const printPreviewDialog = document.getElementById("printPreviewDialog");
+  document.getElementById("closePrintPreviewDialog").addEventListener("click", () => printPreviewDialog.close());
+  printPreviewDialog.addEventListener("click", event => {
+    if (event.target === printPreviewDialog) printPreviewDialog.close();
+  });
+  document.getElementById("printNowButton").addEventListener("click", () => window.print());
 }
 
 bindEvents();

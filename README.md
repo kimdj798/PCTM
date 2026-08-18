@@ -108,3 +108,16 @@ Speaker/Evaluator pairs — and opens it in a dialog with a **Copy to
 clipboard** button. Paste directly into a group chat. Only available when a
 real meeting exists in the `2026` tab (not the Speech Pipeline preview
 shown for meetings that haven't been added yet).
+
+## Printing a full agenda sheet
+
+The **Print agenda** button (next to Export) opens an on-screen preview of
+PCTM's full paper agenda template — logo, club officers, club mission, the
+standard Time/Segment/Role taker table, a speech-timing reference (green/
+yellow/red), Club Business (auto-filled with the next scheduled meeting's
+date), Theme/TQ/WOD, and a speaker info table (name/title/pathway-project/
+evaluator) — so you can review it before committing to anything. A
+**Print / Save as PDF** button inside that preview then opens the browser's
+native print dialog. The speech-timing values are a fixed reference table
+(not sourced from the Sheet). Same availability rule as Export: only shown
+for a real `2026` tab meeting.
