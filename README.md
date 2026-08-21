@@ -31,11 +31,13 @@ endpoint), so no server or API key is required once deployed.
   the day, Timer, Ah-counter). Add a new column with a date label (e.g.
   `Sep 5`) to schedule another meeting — the dashboard picks it up
   automatically.
-  - The **readiness score** only counts the 9 roles shown in the Role
-    assignments panel (Toastmasters, Table Topics Master, Debate Master,
-    Quiz Master, Evaluator #1/#2, Grammarian, Timer, Ah-counter). Speaker
-    names/titles/pathways/projects, word/quote of the day, and Theme/TQ are
-    all tracked and editable, but don't affect the score.
+  - The **readiness score** counts everything shown in the Role assignments
+    panel — the 9 support roles (Toastmasters, Table Topics Master, Debate
+    Master, Quiz Master, Evaluator #1/#2, Grammarian, Timer, Ah-counter)
+    plus the two Speaker names (11 total). Speaker title/pathway/project,
+    word/quote of the day, and Theme/TQ are still tracked and editable, but
+    don't affect the score. In the grid, Speaker #1/Evaluator #1 and
+    Speaker #2/Evaluator #2 are grouped together on the 2nd and 3rd rows.
 - **Theme / TQ** (optional rows on the `2026` tab): add a row labeled `Theme`
   and a row labeled `TQ` (case-insensitive) anywhere in column A, with the
   meeting's theme and theme questions in that meeting's column. For `TQ`,
@@ -43,6 +45,25 @@ endpoint), so no server or API key is required once deployed.
   Sheets) — the dashboard splits on line breaks into a bulleted list. These
   two rows don't count toward the readiness score; they just show as a
   banner at the top of the Meeting Roles section, "Pending" until filled in.
+- **Cancelled** (optional row on the `2026` tab): add a row labeled
+  `Cancelled` in column A. Put anything in a meeting's column to mark it
+  cancelled — either `Yes`, or an actual reason (e.g. `Rained out`), which
+  then shows as "Reason: Rained out" instead of the generic message. A
+  cancelled meeting still appears in its normal Past/Coming/Next slot, but
+  the title gets "— Cancelled", the readiness badge turns neutral gray, the
+  Role assignments/Prepared speeches panels turn dark gray with a
+  cancellation notice in place of their content, and Export/Print hide. It's
+  also excluded from the "Meetings Logged" metric.
+  Toggled via its own **Cancel meeting** / **Un-cancel meeting** button next
+  to the other action buttons — always visible (once the `Cancelled` row
+  exists on the sheet) regardless of whether Edit fields is on. It always
+  prompts for the shared password, every time it's used — even if Edit
+  fields is already unlocked — since cancelling a meeting is more
+  consequential than a routine field edit. Using it does *not* turn on Edit
+  fields' own on/off state or switch Role assignments/Prepared speeches into
+  their editable-input view; those still only activate when you explicitly
+  click Edit fields (which, once the password is already known from Cancel,
+  turns on immediately without asking again).
 - **`ClubOfficers` tab** (`gid=2126938942`): two columns, no header — an
   optional first row with a blank column A and a period label in column B
   (e.g. `Second half of 2026`), then one `Role, Name` row per officer. Shown
@@ -55,9 +76,20 @@ agenda sheet (Time / Segment / Role taker) — it isn't sourced from the Sheet.
 ## Refresh behavior
 
 - Data loads on first visit and whenever you click **Refresh**.
-- "Completed" vs "upcoming" is approximated as week-of-month (`ceil(day / 7)`)
-  compared against today in Korea time, since the schedule tab tracks weeks,
-  not exact dates.
+- **Delivered vs Planned** (Speech Pipeline metrics, Member contribution
+  table, Timeline dimming) is read directly from each speech's 계획 mark on
+  the schedule tab: any circle-like mark (`○`, `◯`, `⚪`, `〇`, `⭕`, or the
+  letter `O`/`o`) means delivered, `△` or blank means still planned. Circle
+  characters that look identical can be different Unicode code points
+  depending on how they're typed/pasted, so several are accepted rather
+  than one exact character. This does not compare against today's date —
+  mark a cell once the speech is actually given and the dashboard picks it
+  up on refresh.
+- Week-of-month (`ceil(day / 7)`) compared against today in Korea time is
+  still used elsewhere — to find "this week" on the Timeline and to pick
+  which schedule week previews as "Next Meeting" when the `2026` tab
+  doesn't have that meeting yet — since the schedule tab tracks weeks, not
+  exact dates.
 
 ## Editing meeting roles from the dashboard
 

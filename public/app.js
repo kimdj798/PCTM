@@ -1,4 +1,4 @@
-const state = { model: null, member: "all", meetingView: "coming", editing: false, currentMeeting: null };
+const state = { model: null, member: "all", meetingView: "coming", editing: false, currentMeeting: null, pendingAfterUnlock: null };
 const SHEET_ID = "1MYHmvO0-doUTvsIXvErfydb1wke_tQ_vCrZOk2CorN4";
 const SCHEDULE_GID = "1701553634";
 const ROLES_GID = "1141924141";
@@ -15,7 +15,7 @@ const EDIT_PASSWORD_KEY = "pctm_edit_password";
 const MONTH_NAMES = { 1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun", 7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec" };
 const KOREAN_MONTH_TO_NUM = { "1월": 1, "2월": 2, "3월": 3, "4월": 4, "5월": 5, "6월": 6, "7월": 7, "8월": 8, "9월": 9, "10월": 10, "11월": 11, "12월": 12 };
 const TEXT_ROLE_LABELS = new Set(["word of the day", "quote of the day"]);
-const META_ROLE_LABELS = new Set(["theme", "tq"]);
+const META_ROLE_LABELS = new Set(["theme", "tq", "cancelled"]);
 // PCTM's standard meeting agenda template (Time / Segment / Role taker),
 // matching the club's printed agenda sheet exactly.
 const AGENDA_BLOCKS = [
@@ -161,8 +161,11 @@ function buildScheduleModel(rows) {
   const today = todayKst();
   const todayMonth = today.getMonth() + 1;
   const todayWeek = weekOfMonth(today.getDate());
-  const isCompleted = wc => wc.monthNum < todayMonth || (wc.monthNum === todayMonth && wc.weekNum < todayWeek);
   const isCurrent = wc => wc.monthNum === todayMonth && wc.weekNum === todayWeek;
+  // 계획 mark: △ (or blank) = not delivered yet, ○ (or "O") = delivered.
+  // Accept any common "circle" character/emoji people might type as a
+  // stand-in for ○, plus the plain letter O/o.
+  const isDeliveredMark = mark => /^[○◯⚪〇⭕Oo]$/.test(mark.trim());
 
   const members = [];
   const speeches = [];
@@ -181,7 +184,7 @@ function buildScheduleModel(rows) {
       const speech = {
         member: name, monthNum: wc.monthNum, weekNum: wc.weekNum, label: wc.label,
         project, title: title || "Untitled speech", planned: Boolean(planMark),
-        completed: isCompleted(wc), current: isCurrent(wc),
+        completed: isDeliveredMark(planMark), current: isCurrent(wc),
       };
       memberSpeeches.push(speech);
       speeches.push(speech);
@@ -233,7 +236,7 @@ function buildRolesModel(rows) {
     const date = parseMonthDay(label, YEAR);
     const roles = [];
     const speakers = [];
-    let theme = "", tq = [], themeSheetRow = null, tqSheetRow = null;
+    let theme = "", tq = [], cancelled = "", themeSheetRow = null, tqSheetRow = null, cancelledSheetRow = null;
     let filled = 0, total = 0;
     const sheetCol = col + 1;
     fields.forEach(field => {
@@ -241,6 +244,7 @@ function buildRolesModel(rows) {
         const value = clean(field.row[col]);
         if (field.key === "theme") { theme = value; themeSheetRow = field.sheetRow; }
         else if (field.key === "tq") { tq = value.split("\n").map(clean).filter(Boolean); tqSheetRow = field.sheetRow; }
+        else if (field.key === "cancelled") { cancelled = value; cancelledSheetRow = field.sheetRow; }
       } else if (field.type === "person") {
         total += 1;
         const member = clean(field.row[col]);
@@ -251,12 +255,14 @@ function buildRolesModel(rows) {
         const value = clean(field.row[col]);
         roles.push({ label: field.label.trim(), value, isText: true, sheetRow: field.sheetRow, sheetCol });
       } else {
-        // Speakers are tracked but shown in the Prepared speeches panel, not
-        // Role assignments, so they don't count toward readiness.
+        // Speaker names are shown in Role assignments (and count toward
+        // readiness); title/pathway/project stay Prepared-speeches-only.
         const member = clean(field.memberRow[col]);
         const title = clean(field.titleRow[col]);
         const pathways = clean(field.pathwaysRow[col]);
         const project = clean(field.projectRow[col]);
+        total += 1;
+        if (member) filled += 1;
         speakers.push({
           label: field.label.trim(), member, title, pathways, project, sheetCol,
           memberSheetRow: field.memberSheetRow, titleSheetRow: field.titleSheetRow,
@@ -264,7 +270,10 @@ function buildRolesModel(rows) {
         });
       }
     });
-    meetings.push({ col, label, date, roles, speakers, theme, tq, themeSheetRow, tqSheetRow, sheetCol, filled, total });
+    meetings.push({
+      col, label, date, roles, speakers, theme, tq, cancelled,
+      themeSheetRow, tqSheetRow, cancelledSheetRow, sheetCol, filled, total,
+    });
   }
 
   const today = todayKst();
@@ -277,7 +286,9 @@ function buildRolesModel(rows) {
 }
 
 function missingFields(meeting) {
-  return meeting.roles.filter(r => !r.isText && !r.member).map(r => r.label);
+  const roleMissing = meeting.roles.filter(r => !r.isText && !r.member).map(r => r.label);
+  const speakerMissing = meeting.speakers.filter(s => !s.member).map(s => s.label);
+  return [...roleMissing, ...speakerMissing];
 }
 
 // ---- Editing (writes back to the Sheet via Apps Script) ----
@@ -300,8 +311,10 @@ async function saveCell(row, col, value) {
 function unlockEditing() {
   const dialog = document.getElementById("editUnlockDialog");
   document.getElementById("editUnlockError").hidden = true;
-  document.getElementById("editUnlockPassword").value = "";
+  const passwordInput = document.getElementById("editUnlockPassword");
+  passwordInput.value = "";
   dialog.showModal();
+  passwordInput.focus();
 }
 
 function lockEditing() {
@@ -315,9 +328,8 @@ function updateEditToggle() {
   const button = document.getElementById("editToggleButton");
   if (!button) return;
   button.hidden = !editingAvailable();
-  const unlocked = editingUnlocked();
-  button.textContent = unlocked ? "Lock editing" : "Edit fields";
-  button.classList.toggle("is-active", unlocked);
+  button.textContent = state.editing ? "Lock editing" : "Edit fields";
+  button.classList.toggle("is-active", state.editing);
 }
 
 function makeEditableField(currentValue, { row, col, placeholder = "Pending", multiline = false, onSaved }) {
@@ -487,17 +499,25 @@ function renderAgendaTable() {
 }
 
 function scheduleWeeksWithSpeeches(model) {
+  // Chronology (is this week's date behind today) is independent from
+  // whether individual speeches in it have been marked delivered (○/O).
+  const today = todayKst();
+  const todayMonth = today.getMonth() + 1;
+  const todayWeek = weekOfMonth(today.getDate());
   const map = new Map();
   model.schedule.speeches.forEach(s => {
     const key = `${s.monthNum}-${s.weekNum}`;
-    if (!map.has(key)) map.set(key, { monthNum: s.monthNum, weekNum: s.weekNum, label: s.label, completed: s.completed, speeches: [] });
+    if (!map.has(key)) {
+      const isPast = s.monthNum < todayMonth || (s.monthNum === todayMonth && s.weekNum < todayWeek);
+      map.set(key, { monthNum: s.monthNum, weekNum: s.weekNum, label: s.label, isPast, speeches: [] });
+    }
     map.get(key).speeches.push(s);
   });
   return [...map.values()].sort((a, b) => (a.monthNum - b.monthNum) || (a.weekNum - b.weekNum));
 }
 
 function nextPipelineWeek(model) {
-  const upcomingWeeks = scheduleWeeksWithSpeeches(model).filter(w => !w.completed);
+  const upcomingWeeks = scheduleWeeksWithSpeeches(model).filter(w => !w.isPast);
   const coming = model.roles.comingMeeting;
   if (coming?.date) {
     const cMonth = coming.date.getMonth() + 1;
@@ -511,6 +531,8 @@ function nextPipelineWeek(model) {
 function renderMeeting(model) {
   const meetingsByView = { past: model.roles.pastMeeting, coming: model.roles.comingMeeting, next: model.roles.nextMeeting };
   const meeting = meetingsByView[state.meetingView];
+  document.querySelector(".assignments-panel").classList.remove("is-cancelled");
+  document.querySelector(".week-speeches-panel").classList.remove("is-cancelled");
 
   if (!meeting) {
     const preview = nextPipelineWeek(model);
@@ -519,7 +541,7 @@ function renderMeeting(model) {
     readiness.setAttribute("aria-disabled", "true");
     readiness.tabIndex = -1;
     setText("readinessStatus", "Needs attention");
-    setText("readinessScore", "0% (0/9)");
+    setText("readinessScore", "0% (0/11)");
     setText("readinessMissing", preview ? "This meeting hasn't been added to the 2026 tab yet." : "No meeting is scheduled in this view yet.");
     readiness.querySelector(".readiness-track").setAttribute("aria-valuenow", "0");
     document.getElementById("readinessBar").style.width = "0%";
@@ -528,6 +550,7 @@ function renderMeeting(model) {
     document.getElementById("meetingThemeBanner").hidden = true;
     document.getElementById("exportButton").hidden = true;
     document.getElementById("printButton").hidden = true;
+    document.getElementById("cancelToggleButton").hidden = true;
     state.currentMeeting = null;
 
     if (preview) {
@@ -545,6 +568,12 @@ function renderMeeting(model) {
     return;
   }
 
+  if (meeting.cancelled) {
+    renderCancelledMeeting(meeting);
+    renderCancelToggle(meeting);
+    return;
+  }
+
   setText("meetingTitle", meeting.date ? `${formatDate(meeting.date)} Meeting` : `${meeting.label} Meeting`);
   renderMeetingReadiness(meeting);
   renderMeetingTheme(meeting);
@@ -553,7 +582,68 @@ function renderMeeting(model) {
   document.getElementById("agendaTimeline").innerHTML = renderAgendaTable();
   document.getElementById("exportButton").hidden = false;
   document.getElementById("printButton").hidden = false;
+  renderCancelToggle(meeting);
   state.currentMeeting = meeting;
+}
+
+async function performCancelToggle(meeting) {
+  const button = document.getElementById("cancelToggleButton");
+  const status = document.getElementById("cancelToggleStatus");
+  const next = meeting.cancelled ? "" : "Yes";
+  button.disabled = true;
+  status.textContent = "Saving…";
+  try {
+    await saveCell(meeting.cancelledSheetRow, meeting.sheetCol, next);
+    meeting.cancelled = next;
+    renderMeeting(state.model);
+  } catch (error) {
+    status.textContent = error.message || "Save failed.";
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function renderCancelToggle(meeting) {
+  const button = document.getElementById("cancelToggleButton");
+  const status = document.getElementById("cancelToggleStatus");
+  status.textContent = "";
+  if (!editingAvailable() || !meeting.cancelledSheetRow) {
+    button.hidden = true;
+    return;
+  }
+  button.hidden = false;
+  button.className = `cancel-toggle-button ${meeting.cancelled ? "is-cancelled" : ""}`;
+  button.textContent = meeting.cancelled ? "Un-cancel meeting" : "Cancel meeting";
+  button.onclick = () => {
+    // Cancelling/un-cancelling a meeting always re-confirms the password,
+    // even if it's already known from Edit fields or a prior use — this is
+    // a more consequential action than a routine field edit.
+    state.pendingAfterUnlock = () => performCancelToggle(meeting);
+    unlockEditing();
+  };
+}
+
+function renderCancelledMeeting(meeting) {
+  setText("meetingTitle", `${meeting.date ? formatDate(meeting.date) : meeting.label} Meeting — Cancelled`);
+  const readiness = document.getElementById("meetingReadiness");
+  readiness.className = "meeting-readiness cancelled";
+  readiness.setAttribute("aria-disabled", "true");
+  readiness.tabIndex = -1;
+  setText("readinessStatus", "Cancelled");
+  setText("readinessScore", "—");
+  const reason = meeting.cancelled && meeting.cancelled.toLowerCase() !== "yes" ? meeting.cancelled : "";
+  setText("readinessMissing", reason ? `Reason: ${reason}` : "This meeting has been cancelled.");
+  readiness.querySelector(".readiness-track").setAttribute("aria-valuenow", "0");
+  document.getElementById("readinessBar").style.width = "0%";
+  document.getElementById("meetingThemeBanner").hidden = true;
+  document.getElementById("weekAssignments").innerHTML = `<div class="empty-state">This meeting has been cancelled.</div>`;
+  document.getElementById("weekSpeeches").innerHTML = `<div class="empty-state">This meeting has been cancelled.</div>`;
+  document.getElementById("agendaTimeline").innerHTML = `<div class="empty-state">No agenda — this meeting was cancelled.</div>`;
+  document.getElementById("exportButton").hidden = true;
+  document.getElementById("printButton").hidden = true;
+  document.querySelector(".assignments-panel").classList.add("is-cancelled");
+  document.querySelector(".week-speeches-panel").classList.add("is-cancelled");
+  state.currentMeeting = null;
 }
 
 // ---- Export ----
@@ -694,7 +784,7 @@ function openPrintPreview() {
 function renderMeetingTheme(meeting) {
   const banner = document.getElementById("meetingThemeBanner");
   banner.hidden = false;
-  const editing = editingAvailable() && editingUnlocked();
+  const editing = editingAvailable() && state.editing;
 
   const themeContainer = document.getElementById("meetingThemeText");
   themeContainer.innerHTML = "";
@@ -742,27 +832,28 @@ function renderMeetingTheme(meeting) {
 }
 
 function recomputeReadiness(meeting) {
-  meeting.filled = meeting.roles.filter(r => !r.isText && r.member).length;
+  const roleFilled = meeting.roles.filter(r => !r.isText && r.member).length;
+  const speakerFilled = meeting.speakers.filter(s => s.member).length;
+  meeting.filled = roleFilled + speakerFilled;
   renderMeetingReadiness(meeting);
 }
 
 function renderWeekAssignments(meeting) {
   const container = document.getElementById("weekAssignments");
   container.innerHTML = "";
-  const editing = editingAvailable() && editingUnlocked();
-  const hiddenLabels = new Set(["word of the day", "quote of the day"]);
-  meeting.roles.filter(r => !hiddenLabels.has(r.label.toLowerCase())).forEach(r => {
+  const editing = editingAvailable() && state.editing;
+
+  const appendCell = (label, value, sheetRow, sheetCol, onSaved) => {
     const cell = document.createElement("div");
-    const value = r.isText ? r.value : r.member;
     cell.className = `assignment ${value ? "" : "pending"}`;
-    const label = document.createElement("span");
-    label.textContent = r.label;
-    cell.appendChild(label);
+    const labelEl = document.createElement("span");
+    labelEl.textContent = label;
+    cell.appendChild(labelEl);
     if (editing) {
       cell.appendChild(makeEditableField(value, {
-        row: r.sheetRow, col: r.sheetCol,
+        row: sheetRow, col: sheetCol,
         onSaved: next => {
-          if (r.isText) r.value = next; else r.member = next;
+          onSaved(next);
           cell.classList.toggle("pending", !next);
           recomputeReadiness(meeting);
         },
@@ -773,7 +864,27 @@ function renderWeekAssignments(meeting) {
       cell.appendChild(strong);
     }
     container.appendChild(cell);
+  };
+
+  const appendRole = r => appendCell(r.label, r.isText ? r.value : r.member, r.sheetRow, r.sheetCol, next => {
+    if (r.isText) r.value = next; else r.member = next;
   });
+  const appendSpeaker = s => appendCell(s.label, s.member, s.memberSheetRow, s.sheetCol, next => { s.member = next; });
+
+  const excludedLabels = new Set(["word of the day", "quote of the day", "evaluator #1", "evaluator #2"]);
+  const otherRoles = meeting.roles.filter(r => !excludedLabels.has(r.label.toLowerCase()));
+  const evaluator1 = meeting.roles.find(r => r.label === "Evaluator #1");
+  const evaluator2 = meeting.roles.find(r => r.label === "Evaluator #2");
+  const [speaker1, speaker2] = meeting.speakers;
+
+  // Grid is 2 columns: row 1 is the first two "other" roles, rows 2 and 3
+  // are the Speaker/Evaluator pairs, then the remaining "other" roles.
+  otherRoles.slice(0, 2).forEach(appendRole);
+  if (speaker1) appendSpeaker(speaker1);
+  if (evaluator1) appendRole(evaluator1);
+  if (speaker2) appendSpeaker(speaker2);
+  if (evaluator2) appendRole(evaluator2);
+  otherRoles.slice(2).forEach(appendRole);
 }
 
 function renderWeekSpeeches(meeting) {
@@ -783,7 +894,7 @@ function renderWeekSpeeches(meeting) {
     container.innerHTML = `<div class="empty-state">No speakers assigned yet.</div>`;
     return;
   }
-  const editing = editingAvailable() && editingUnlocked();
+  const editing = editingAvailable() && state.editing;
   meeting.speakers.forEach(s => {
     const card = document.createElement("article");
     card.className = `week-speech ${(!s.member || !s.title) ? "pending" : ""}`;
@@ -945,7 +1056,7 @@ function render(model, meta) {
   setText("metricCompleted", completed);
   setText("metricUpcoming", upcoming);
   setText("metricSpeakers", speakers);
-  setText("metricMeetings", model.roles.meetings.length);
+  setText("metricMeetings", model.roles.meetings.filter(m => !m.cancelled).length);
 
   renderNotices(model);
   renderOfficers(model);
@@ -1006,10 +1117,22 @@ function bindEvents() {
   document.getElementById("closeSpeechDialog").addEventListener("click", () => document.getElementById("speechDetailsDialog").close());
 
   document.getElementById("editToggleButton").addEventListener("click", () => {
-    if (editingUnlocked()) lockEditing();
-    else unlockEditing();
+    if (state.editing) {
+      lockEditing();
+    } else if (editingUnlocked()) {
+      // Password already verified (e.g. via the Cancel meeting button) — just turn on edit mode, no re-prompt.
+      state.editing = true;
+      updateEditToggle();
+      if (state.model) renderMeeting(state.model);
+    } else {
+      unlockEditing();
+    }
   });
-  document.getElementById("closeEditUnlockDialog").addEventListener("click", () => document.getElementById("editUnlockDialog").close());
+  document.getElementById("closeEditUnlockDialog").addEventListener("click", () => {
+    state.pendingAfterUnlock = null;
+    document.getElementById("editUnlockDialog").close();
+  });
+  document.getElementById("editUnlockDialog").addEventListener("cancel", () => { state.pendingAfterUnlock = null; });
   document.getElementById("editUnlockForm").addEventListener("submit", async event => {
     event.preventDefault();
     const password = document.getElementById("editUnlockPassword").value;
@@ -1026,10 +1149,18 @@ function bindEvents() {
       const payload = await response.json().catch(() => ({ ok: false }));
       if (!payload.ok) throw new Error(payload.error || "Incorrect password.");
       sessionStorage.setItem(EDIT_PASSWORD_KEY, password);
-      state.editing = true;
       document.getElementById("editUnlockDialog").close();
-      updateEditToggle();
-      if (state.model) renderMeeting(state.model);
+      if (state.pendingAfterUnlock) {
+        // Triggered by a quick action (e.g. Cancel meeting) — run it without
+        // touching Edit fields' own on/off state or switching panels into edit mode.
+        const run = state.pendingAfterUnlock;
+        state.pendingAfterUnlock = null;
+        run();
+      } else {
+        state.editing = true;
+        updateEditToggle();
+        if (state.model) renderMeeting(state.model);
+      }
     } catch (error) {
       errorEl.textContent = error.message || "Could not verify password.";
       errorEl.hidden = false;
