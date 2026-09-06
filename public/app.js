@@ -3,6 +3,7 @@ const SHEET_ID = "1MYHmvO0-doUTvsIXvErfydb1wke_tQ_vCrZOk2CorN4";
 const SCHEDULE_GID = "1701553634";
 const ROLES_GID = "1141924141";
 const OFFICERS_GID = "2126938942";
+const AGENDA_TIMES_GID = "2142361626";
 const SHEET_SOURCE = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit?gid=${SCHEDULE_GID}`;
 const DASHBOARD_URL = "https://kimdj798.github.io/PCTM/";
 const YEAR = 2026;
@@ -77,18 +78,20 @@ const AGENDA_BLOCKS = [
 async function fetchPublicSheets() {
   const base = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq`;
   const stamp = Date.now();
-  const [scheduleResponse, rolesResponse, officersResponse] = await Promise.all([
+  const [scheduleResponse, rolesResponse, officersResponse, agendaTimesResponse] = await Promise.all([
     fetch(`${base}?gid=${SCHEDULE_GID}&tqx=out%3Acsv&_=${stamp}`, { cache: "no-store" }),
     fetch(`${base}?gid=${ROLES_GID}&tqx=out%3Acsv&_=${stamp}`, { cache: "no-store" }),
     fetch(`${base}?gid=${OFFICERS_GID}&tqx=out%3Acsv&_=${stamp}`, { cache: "no-store" }),
+    fetch(`${base}?gid=${AGENDA_TIMES_GID}&tqx=out%3Acsv&_=${stamp}`, { cache: "no-store" }),
   ]);
-  if (!scheduleResponse.ok || !rolesResponse.ok || !officersResponse.ok) {
-    throw new Error(`Google Sheets returned ${scheduleResponse.status}/${rolesResponse.status}/${officersResponse.status}`);
+  if (!scheduleResponse.ok || !rolesResponse.ok || !officersResponse.ok || !agendaTimesResponse.ok) {
+    throw new Error(`Google Sheets returned ${scheduleResponse.status}/${rolesResponse.status}/${officersResponse.status}/${agendaTimesResponse.status}`);
   }
   return {
     scheduleCsv: await scheduleResponse.text(),
     rolesCsv: await rolesResponse.text(),
     officersCsv: await officersResponse.text(),
+    agendaTimesCsv: await agendaTimesResponse.text(),
     fetchedAt: new Date().toISOString(),
     source: SHEET_SOURCE,
   };
@@ -376,6 +379,18 @@ function makeEditableField(currentValue, { row, col, placeholder = "Pending", mu
 
 // ---- Club officers ----
 
+function buildAgendaModel(rows) {
+  const items = [];
+  rows.forEach((row, index) => {
+    const time = clean(row[0]);
+    const segment = clean(row[1]);
+    const roleTaker = clean(row[2]);
+    if (!time && !segment && !roleTaker) return;
+    items[index] = { time, segment, roleTaker, sheetRow: index + 1 };
+  });
+  return items;
+}
+
 function buildOfficersModel(rows) {
   let period = "";
   const officers = [];
@@ -479,23 +494,123 @@ function renderMeetingReadiness(meeting) {
   document.getElementById("readinessBar").style.width = `${percentage}%`;
 }
 
-function renderAgendaTable() {
-  const rowsHtml = AGENDA_BLOCKS.map(block => block.rows.map(([segment, roleTaker], index) => {
+function resolvedAgendaBlocks(agendaModel) {
+  let position = 0;
+  return AGENDA_BLOCKS.map(block => {
+    const rows = block.rows.map(([defaultSegment, defaultRoleTaker]) => {
+      const override = agendaModel?.[position];
+      position += 1;
+      return {
+        segment: override ? override.segment : defaultSegment,
+        roleTaker: override ? override.roleTaker : defaultRoleTaker,
+        sheetRow: override?.sheetRow ?? null,
+      };
+    });
+    const blockStartOverride = agendaModel?.[position - block.rows.length];
+    return {
+      highlight: block.highlight,
+      time: (blockStartOverride && blockStartOverride.time) || block.time,
+      timeSheetRow: blockStartOverride?.sheetRow ?? null,
+      rows,
+    };
+  });
+}
+
+function agendaTableHtml(blocks) {
+  const rowsHtml = blocks.map(block => block.rows.map((row, index) => {
     const isBlockStart = index === 0;
     const timeCell = isBlockStart ? `<td class="agenda-time" rowspan="${block.rows.length}">${escapeHtml(block.time)}</td>` : "";
     const segmentText = isBlockStart && block.highlight
-      ? `<mark class="agenda-highlight">${escapeHtml(segment)}</mark>`
-      : escapeHtml(segment);
+      ? `<mark class="agenda-highlight">${escapeHtml(row.segment)}</mark>`
+      : escapeHtml(row.segment);
     return `<tr class="${isBlockStart ? "agenda-block-start" : "agenda-sub-row"}">
       ${timeCell}
       <td class="${isBlockStart ? "agenda-segment" : "agenda-sub-segment"}">${segmentText}</td>
-      <td class="agenda-role-taker">${escapeHtml(roleTaker)}</td>
+      <td class="agenda-role-taker">${escapeHtml(row.roleTaker)}</td>
     </tr>`;
   }).join("")).join("");
   return `<div class="agenda-table-wrap"><table class="agenda-standard-table">
     <thead><tr><th>Time</th><th>Segment</th><th>Role taker</th></tr></thead>
     <tbody>${rowsHtml}</tbody>
   </table></div>`;
+}
+
+function renderAgendaSection(agendaModel) {
+  const container = document.getElementById("agendaTimeline");
+  const blocks = resolvedAgendaBlocks(agendaModel);
+  const editing = editingAvailable() && state.editing;
+
+  if (!editing) {
+    container.innerHTML = agendaTableHtml(blocks);
+    return;
+  }
+
+  container.innerHTML = `<div class="agenda-table-wrap"><table class="agenda-standard-table">
+    <thead><tr><th>Time</th><th>Segment</th><th>Role taker</th></tr></thead>
+    <tbody id="agendaTableBody"></tbody>
+  </table></div>`;
+  const tbody = document.getElementById("agendaTableBody");
+  const addRowMissingTitle = 'Add this row to the "AgendaTimes" tab to make it editable.';
+  blocks.forEach(block => {
+    block.rows.forEach((row, index) => {
+      const isBlockStart = index === 0;
+      const tr = document.createElement("tr");
+      tr.className = isBlockStart ? "agenda-block-start" : "agenda-sub-row";
+      if (isBlockStart) {
+        const timeTd = document.createElement("td");
+        timeTd.className = "agenda-time";
+        timeTd.rowSpan = block.rows.length;
+        if (block.timeSheetRow) {
+          timeTd.appendChild(makeEditableField(block.time, {
+            row: block.timeSheetRow, col: 1,
+            onSaved: next => {
+              agendaModel[block.timeSheetRow - 1] = { ...agendaModel[block.timeSheetRow - 1], time: next, sheetRow: block.timeSheetRow };
+            },
+          }));
+        } else {
+          timeTd.textContent = block.time;
+          timeTd.title = addRowMissingTitle;
+        }
+        tr.appendChild(timeTd);
+      }
+      const segTd = document.createElement("td");
+      segTd.className = isBlockStart ? "agenda-segment" : "agenda-sub-segment";
+      if (row.sheetRow) {
+        const field = makeEditableField(row.segment, {
+          row: row.sheetRow, col: 2, placeholder: "Segment",
+          onSaved: next => {
+            agendaModel[row.sheetRow - 1] = { ...agendaModel[row.sheetRow - 1], segment: next, sheetRow: row.sheetRow };
+          },
+        });
+        if (isBlockStart && block.highlight) field.classList.add("agenda-highlight-field");
+        segTd.appendChild(field);
+      } else if (isBlockStart && block.highlight) {
+        const mark = document.createElement("mark");
+        mark.className = "agenda-highlight";
+        mark.textContent = row.segment;
+        segTd.appendChild(mark);
+      } else {
+        segTd.textContent = row.segment;
+        segTd.title = addRowMissingTitle;
+      }
+      tr.appendChild(segTd);
+      const roleTd = document.createElement("td");
+      roleTd.className = "agenda-role-taker";
+      if (row.sheetRow) {
+        roleTd.appendChild(makeEditableField(row.roleTaker, {
+          row: row.sheetRow, col: 3, placeholder: "Role taker",
+          onSaved: next => {
+            agendaModel[row.sheetRow - 1] = { ...agendaModel[row.sheetRow - 1], roleTaker: next, sheetRow: row.sheetRow };
+          },
+        }));
+      } else {
+        roleTd.textContent = row.roleTaker;
+        roleTd.title = addRowMissingTitle;
+      }
+      tr.appendChild(roleTd);
+      tbody.appendChild(tr);
+    });
+  });
 }
 
 function scheduleWeeksWithSpeeches(model) {
@@ -546,7 +661,7 @@ function renderMeeting(model) {
     readiness.querySelector(".readiness-track").setAttribute("aria-valuenow", "0");
     document.getElementById("readinessBar").style.width = "0%";
     document.getElementById("weekAssignments").innerHTML = `<div class="empty-state">Add a column to the 2026 tab to populate this meeting.</div>`;
-    document.getElementById("agendaTimeline").innerHTML = renderAgendaTable();
+    renderAgendaSection(model.agendaTimes);
     document.getElementById("meetingThemeBanner").hidden = true;
     document.getElementById("exportButton").hidden = true;
     document.getElementById("printButton").hidden = true;
@@ -579,7 +694,7 @@ function renderMeeting(model) {
   renderMeetingTheme(meeting);
   renderWeekAssignments(meeting);
   renderWeekSpeeches(meeting);
-  document.getElementById("agendaTimeline").innerHTML = renderAgendaTable();
+  renderAgendaSection(model.agendaTimes);
   document.getElementById("exportButton").hidden = false;
   document.getElementById("printButton").hidden = false;
   renderCancelToggle(meeting);
@@ -735,6 +850,8 @@ function buildPrintAgendaHtml(meeting, model) {
     const pathwaysProject = [s.pathways, s.project].filter(Boolean).join(" — ");
     return `<tr><td>${i + 1}</td><td>${escapeHtml(s.member)}</td><td>${escapeHtml(s.title)}</td><td>${escapeHtml(pathwaysProject)}</td><td>${escapeHtml(evaluator)}</td></tr>`;
   }).join("");
+  const assignmentRows = orderedRoleAssignments(meeting)
+    .map(item => `<tr><td>${escapeHtml(item.label)}</td><td>${escapeHtml(item.value || "Pending")}</td></tr>`).join("");
 
   return `
     <p class="print-dashboard-url">${escapeHtml(DASHBOARD_URL)}</p>
@@ -749,13 +866,15 @@ function buildPrintAgendaHtml(meeting, model) {
       <div class="print-col print-col-main">
         <h3>Club Mission:</h3>
         <p class="print-mission">${escapeHtml(missionText)}</p>
-        ${renderAgendaTable()}
+        ${agendaTableHtml(resolvedAgendaBlocks(model.agendaTimes))}
         <h3>Theme: ${escapeHtml(meeting.theme || "TBD")}</h3>
         <p><strong>TQ:</strong></p>
         <ul>${meeting.tq.length ? meeting.tq.map(q => `<li>${escapeHtml(q)}</li>`).join("") : "<li>TBD</li>"}</ul>
         <p><strong>WOD:</strong> ${escapeHtml(wodRole?.value || "TBD")}</p>
       </div>
       <div class="print-col print-col-side">
+        <h3>Role Assignments:</h3>
+        <table class="print-kv"><tbody>${assignmentRows}</tbody></table>
         <h3>Club Officers:</h3>
         <table class="print-kv"><tbody>${officersRows}</tbody></table>
         <h3>Speech Time</h3>
@@ -838,6 +957,28 @@ function recomputeReadiness(meeting) {
   renderMeetingReadiness(meeting);
 }
 
+function orderedRoleAssignments(meeting) {
+  // Same grouping as the live grid: first two "other" roles, then the
+  // Speaker/Evaluator pairs, then the remaining "other" roles.
+  const excludedLabels = new Set(["word of the day", "quote of the day", "evaluator #1", "evaluator #2"]);
+  const otherRoles = meeting.roles.filter(r => !excludedLabels.has(r.label.toLowerCase()));
+  const evaluator1 = meeting.roles.find(r => r.label === "Evaluator #1");
+  const evaluator2 = meeting.roles.find(r => r.label === "Evaluator #2");
+  const [speaker1, speaker2] = meeting.speakers;
+
+  const items = [];
+  const pushRole = r => items.push({ label: r.label, value: r.isText ? r.value : r.member, role: r, isSpeaker: false });
+  const pushSpeaker = s => items.push({ label: s.label, value: s.member, speaker: s, isSpeaker: true });
+
+  otherRoles.slice(0, 2).forEach(pushRole);
+  if (speaker1) pushSpeaker(speaker1);
+  if (evaluator1) pushRole(evaluator1);
+  if (speaker2) pushSpeaker(speaker2);
+  if (evaluator2) pushRole(evaluator2);
+  otherRoles.slice(2).forEach(pushRole);
+  return items;
+}
+
 function renderWeekAssignments(meeting) {
   const container = document.getElementById("weekAssignments");
   container.innerHTML = "";
@@ -866,25 +1007,15 @@ function renderWeekAssignments(meeting) {
     container.appendChild(cell);
   };
 
-  const appendRole = r => appendCell(r.label, r.isText ? r.value : r.member, r.sheetRow, r.sheetCol, next => {
-    if (r.isText) r.value = next; else r.member = next;
+  orderedRoleAssignments(meeting).forEach(item => {
+    if (item.isSpeaker) {
+      appendCell(item.label, item.value, item.speaker.memberSheetRow, item.speaker.sheetCol, next => { item.speaker.member = next; });
+    } else {
+      appendCell(item.label, item.value, item.role.sheetRow, item.role.sheetCol, next => {
+        if (item.role.isText) item.role.value = next; else item.role.member = next;
+      });
+    }
   });
-  const appendSpeaker = s => appendCell(s.label, s.member, s.memberSheetRow, s.sheetCol, next => { s.member = next; });
-
-  const excludedLabels = new Set(["word of the day", "quote of the day", "evaluator #1", "evaluator #2"]);
-  const otherRoles = meeting.roles.filter(r => !excludedLabels.has(r.label.toLowerCase()));
-  const evaluator1 = meeting.roles.find(r => r.label === "Evaluator #1");
-  const evaluator2 = meeting.roles.find(r => r.label === "Evaluator #2");
-  const [speaker1, speaker2] = meeting.speakers;
-
-  // Grid is 2 columns: row 1 is the first two "other" roles, rows 2 and 3
-  // are the Speaker/Evaluator pairs, then the remaining "other" roles.
-  otherRoles.slice(0, 2).forEach(appendRole);
-  if (speaker1) appendSpeaker(speaker1);
-  if (evaluator1) appendRole(evaluator1);
-  if (speaker2) appendSpeaker(speaker2);
-  if (evaluator2) appendRole(evaluator2);
-  otherRoles.slice(2).forEach(appendRole);
 }
 
 function renderWeekSpeeches(meeting) {
@@ -1084,7 +1215,8 @@ async function loadData(force = false) {
     const schedule = buildScheduleModel(parseCsv(meta.scheduleCsv));
     const roles = buildRolesModel(parseCsv(meta.rolesCsv));
     const officers = buildOfficersModel(parseCsv(meta.officersCsv));
-    state.model = { schedule, roles, officers };
+    const agendaTimes = buildAgendaModel(parseCsv(meta.agendaTimesCsv));
+    state.model = { schedule, roles, officers, agendaTimes };
     render(state.model, meta);
     banner.hidden = true;
   } catch (error) {

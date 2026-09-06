@@ -462,6 +462,10 @@ a { color: inherit; }
   padding: 1px 5px;
   border-radius: 3px;
 }
+.agenda-highlight-field input {
+  background: color-mix(in srgb, var(--series-4) 55%, transparent);
+  font-weight: 700;
+}
 
 /* Pipeline */
 .pipeline-section .two-column { display: grid; grid-template-columns: 1.1fr 1fr; gap: 16px; margin-bottom: 16px; }

@@ -69,9 +69,30 @@ endpoint), so no server or API key is required once deployed.
   (e.g. `Second half of 2026`), then one `Role, Name` row per officer. Shown
   as a card in the top-right of the hero. Edit the sheet directly to update
   it; it isn't editable from the dashboard's Edit fields mode.
+- **`AgendaTimes` tab**: three columns, no header, **one row per line of the
+  Standard agenda table** (every segment, including sub-rows like `Timer's
+  report` — not just the 9 main blocks), in the exact top-to-bottom order
+  they appear on screen: column A is the start time (only filled in on the
+  first row of each time block — e.g. `Opening`, `Theme Talk`, `Prepared
+  Speech`; leave it blank on sub-rows since they share their block's time),
+  column B is the segment name, column C is the role taker. Unlike
+  everything else on this tab, none of this is tied to any one meeting — it
+  applies to the Standard agenda template shown on every meeting view.
+  Editable via Edit fields (every Time/Segment/Role taker cell becomes its
+  own input, matched to the sheet purely by row position); a row missing
+  from this tab falls back to the built-in default text for that line and
+  isn't editable until you add its row. See
+  [`apps-script/agenda-times-seed.csv`](apps-script/agenda-times-seed.csv)
+  for the full 24-row starter content (segment/role-taker text from the
+  built-in template, with the club's current custom times already filled
+  in) — paste it into the tab starting at A1, overwriting the old 9-row/
+  2-column content, to make every field editable without changing what's
+  currently displayed.
 
-The "Standard agenda" panel is a fixed template matching PCTM's printed
-agenda sheet (Time / Segment / Role taker) — it isn't sourced from the Sheet.
+The "Standard agenda" panel's row layout (which segments belong to which
+time block, and which rows get the highlighted-orange treatment) is a fixed
+template matching PCTM's printed agenda sheet — only the Time/Segment/Role
+taker text in each cell is sourced from (and editable via) the Sheet.
 
 ## Refresh behavior
 
@@ -144,12 +165,14 @@ shown for meetings that haven't been added yet).
 ## Printing a full agenda sheet
 
 The **Print agenda** button (next to Export) opens an on-screen preview of
-PCTM's full paper agenda template — logo, club officers, club mission, the
-standard Time/Segment/Role taker table, a speech-timing reference (green/
-yellow/red), Club Business (auto-filled with the next scheduled meeting's
-date), Theme/TQ/WOD, and a speaker info table (name/title/pathway-project/
-evaluator) — so you can review it before committing to anything. A
-**Print / Save as PDF** button inside that preview then opens the browser's
+PCTM's full paper agenda template — logo, a **Role Assignments** table (the
+same names and ordering as the live Role assignments panel), club officers,
+club mission, the standard Time/Segment/Role taker table, a speech-timing
+reference (green/yellow/red), Club Business (auto-filled with the next
+scheduled meeting's date), Theme/TQ/WOD, and a speaker info table
+(name/title/pathway-project/evaluator) — so you can review it before
+committing to anything. A **Print / Save as PDF** button inside that preview
+then opens the browser's
 native print dialog. The speech-timing values are a fixed reference table
 (not sourced from the Sheet). Same availability rule as Export: only shown
 for a real `2026` tab meeting.
