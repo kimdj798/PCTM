@@ -26,18 +26,20 @@ endpoint), so no server or API key is required once deployed.
   Speech Pipeline section — who's speaking, when (by month/week), on what
   project, with what title.
 - **`2026` tab** (`gid=1141924141`): one column per meeting, with role rows
-  (Toastmasters, Table Topics Master, Debate Master, Quiz Master, two Speaker
-  slots with title/pathway/project, two Evaluators, Grammarian, word/quote of
+  (Toastmasters, Table Topics Master, Debate Master, Quiz Master, three Speaker
+  slots with title/pathway/project, three Evaluators, Grammarian, word/quote of
   the day, Timer, Ah-counter). Add a new column with a date label (e.g.
   `Sep 5`) to schedule another meeting — the dashboard picks it up
   automatically.
   - The **readiness score** counts everything shown in the Role assignments
-    panel — the 9 support roles (Toastmasters, Table Topics Master, Debate
-    Master, Quiz Master, Evaluator #1/#2, Grammarian, Timer, Ah-counter)
-    plus the two Speaker names (11 total). Speaker title/pathway/project,
+    panel — the 10 support roles (Toastmasters, Table Topics Master, Debate
+    Master, Quiz Master, Evaluator #1/#2/#3, Grammarian, Timer, Ah-counter)
+    plus the three Speaker names (13 total). Speaker title/pathway/project,
     word/quote of the day, and Theme/TQ are still tracked and editable, but
-    don't affect the score. In the grid, Speaker #1/Evaluator #1 and
-    Speaker #2/Evaluator #2 are grouped together on the 2nd and 3rd rows.
+    don't affect the score. In the grid, each Speaker #N/Evaluator #N pair
+    is grouped on its own row (rows 2–4). Speaker/Evaluator slots are
+    detected by label, so adding a `Speaker #4` block and `Evaluator #4` row
+    to the sheet works without code changes.
 - **Theme / TQ** (optional rows on the `2026` tab): add a row labeled `Theme`
   and a row labeled `TQ` (case-insensitive) anywhere in column A, with the
   meeting's theme and theme questions in that meeting's column. For `TQ`,
@@ -156,8 +158,8 @@ button stays hidden until this is set.
 
 The **Export** button next to Edit fields (Meeting Roles heading) generates a
 KakaoTalk-ready text summary of the selected meeting — date, Toastmaster/
-Table Topics/Debate/Quiz Master, Grammarian/Timer/Ah Counter, and both
-Speaker/Evaluator pairs — and opens it in a dialog with a **Copy to
+Table Topics/Debate/Quiz Master, Grammarian/Timer/Ah Counter, and every
+Speaker/Evaluator pair — and opens it in a dialog with a **Copy to
 clipboard** button. Paste directly into a group chat. Only available when a
 real meeting exists in the `2026` tab (not the Speech Pipeline preview
 shown for meetings that haven't been added yet).

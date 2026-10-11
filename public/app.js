@@ -782,16 +782,16 @@ function buildExportText(meeting) {
     "",
     `🍋 Toastmaster : ${roleValue("Toastmasters")}`,
     `🍋 Table Topics Master : ${roleValue("Table Topics Master")}`,
-    `🍋 Debate Master : ${debate}${debate ? " " : ""}(연설1,2과 평가1,2가 차면 토론은 자동 취소됩니다)`,
+    `🍋 Debate Master : ${debate}${debate ? " " : ""}(연설 2회 이상 차면 토론은 자동 취소됩니다)`,
     `🍋 Quiz Master : ${roleValue("Quiz Master")}`,
     `🟩 Grammarian : ${roleValue("Grammarian")}`,
     `🟩 Timer : ${roleValue("Timer")}`,
     `🟩 Ah Counter : ${roleValue("Ah-counter")}`,
     "",
-    `🫐 Speaker #1 : ${speakerValue("Speaker #1")}`,
-    `🫐 Evaluator #1 : ${roleValue("Evaluator #1")}`,
-    `🫐 Speaker #2 : ${speakerValue("Speaker #2")}`,
-    `🫐 Evaluator #2 : ${roleValue("Evaluator #2")}`,
+    ...meeting.speakers.flatMap((s, i) => [
+      `🫐 Speaker #${i + 1} : ${speakerValue(s.label)}`,
+      `🫐 Evaluator #${i + 1} : ${roleValue(`Evaluator #${i + 1}`)}`,
+    ]),
   ].join("\n");
 }
 
@@ -958,23 +958,26 @@ function recomputeReadiness(meeting) {
 }
 
 function orderedRoleAssignments(meeting) {
-  // Same grouping as the live grid: first two "other" roles, then the
-  // Speaker/Evaluator pairs, then the remaining "other" roles.
-  const excludedLabels = new Set(["word of the day", "quote of the day", "evaluator #1", "evaluator #2"]);
-  const otherRoles = meeting.roles.filter(r => !excludedLabels.has(r.label.toLowerCase()));
-  const evaluator1 = meeting.roles.find(r => r.label === "Evaluator #1");
-  const evaluator2 = meeting.roles.find(r => r.label === "Evaluator #2");
-  const [speaker1, speaker2] = meeting.speakers;
+  // Same grouping as the live grid: first two "other" roles, then each
+  // Speaker #N / Evaluator #N pair, then the remaining "other" roles.
+  const isEvaluator = r => /^evaluator\s*#?\d+/i.test(r.label);
+  const excludedLabels = new Set(["word of the day", "quote of the day"]);
+  const otherRoles = meeting.roles.filter(r => !excludedLabels.has(r.label.toLowerCase()) && !isEvaluator(r));
+  const evaluators = meeting.roles.filter(isEvaluator);
+  const slotNumber = label => label.match(/\d+/)?.[0];
 
   const items = [];
   const pushRole = r => items.push({ label: r.label, value: r.isText ? r.value : r.member, role: r, isSpeaker: false });
   const pushSpeaker = s => items.push({ label: s.label, value: s.member, speaker: s, isSpeaker: true });
 
   otherRoles.slice(0, 2).forEach(pushRole);
-  if (speaker1) pushSpeaker(speaker1);
-  if (evaluator1) pushRole(evaluator1);
-  if (speaker2) pushSpeaker(speaker2);
-  if (evaluator2) pushRole(evaluator2);
+  meeting.speakers.forEach(s => {
+    pushSpeaker(s);
+    const evaluator = evaluators.find(r => slotNumber(r.label) === slotNumber(s.label));
+    if (evaluator) pushRole(evaluator);
+  });
+  // Evaluators without a matching speaker slot still get shown.
+  evaluators.filter(r => !items.some(item => item.role === r)).forEach(pushRole);
   otherRoles.slice(2).forEach(pushRole);
   return items;
 }
@@ -1101,7 +1104,7 @@ function renderMemberChart(model) {
   const counts = countBy(speeches, s => s.member);
   const bars = model.schedule.members
     .map(m => ({ name: m.name, count: counts.get(m.name) || 0, items: m.speeches.filter(s => state.member === "all" || s.member === state.member) }))
-    .filter(m => m.count || state.member === m.name)
+    .filter(m => state.member === "all" || state.member === m.name)
     .sort((a, b) => b.count - a.count);
   const max = Math.max(1, ...bars.map(b => b.count));
   const chart = document.getElementById("memberChart");
@@ -1123,7 +1126,7 @@ function renderMemberTable(model) {
     total: member.speeches.length,
     upcoming: member.speeches.filter(s => !s.completed).length,
     delivered: member.speeches.filter(s => s.completed).length,
-  })).filter(m => m.total).sort((a, b) => b.total - a.total);
+  })).sort((a, b) => b.total - a.total);
   document.getElementById("memberTable").innerHTML = ranked.map(m => `
     <tr data-member="${escapeHtml(m.name)}" class="${state.member === m.name ? "active" : ""}">
       <td><strong>${escapeHtml(m.name)}</strong></td><td>${m.total}</td><td>${m.upcoming}</td><td>${m.delivered}</td>

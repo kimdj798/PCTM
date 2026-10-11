@@ -346,6 +346,8 @@ a { color: inherit; }
 .assignment:nth-child(9) { --accent: var(--series-1); }
 .assignment:nth-child(10) { --accent: var(--series-2); }
 .assignment:nth-child(11) { --accent: var(--series-3); }
+.assignment:nth-child(12) { --accent: var(--series-4); }
+.assignment:nth-child(13) { --accent: var(--series-5); }
 .assignment span { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
 .assignment strong { font-size: 21px; font-weight: 800; color: var(--accent, var(--series-1)); letter-spacing: -0.01em; }
 .assignment.pending strong { color: var(--text-muted); font-style: italic; font-weight: 500; font-size: 15px; }
