@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PCTM Assistant</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./chat.css" />
+  </head>
+  <body>
+    <div class="page-shell chat-shell">
+      <header class="topbar">
+        <a class="brand" href="./index.html" aria-label="Back to PCTM dashboard">
+          <span class="brand-mark">PC<em>TM</em></span>
+          <span class="brand-sub">Club Assistant</span>
+        </a>
+        <div class="topbar-right">
+          <label class="chat-language">
+            <span>Answer in</span>
+            <select id="chatLanguage">
+              <option value="auto">Question's language</option>
+              <option value="en">English</option>
+            </select>
+          </label>
+          <button id="chatClearButton" class="refresh-button" type="button">New chat</button>
+        </div>
+      </header>
+
+      <main class="chat-main">
+        <section id="chatUnlock" class="chat-card chat-unlock" hidden>
+          <h1>PCTM Assistant</h1>
+          <p>Ask questions about the club guide. Enter the club password to start.</p>
+          <form id="chatUnlockForm" class="chat-unlock-form">
+            <input id="chatPassword" type="password" placeholder="Password" autocomplete="current-password" required />
+            <button type="submit" class="chat-send-button">Unlock</button>
+          </form>
+          <p id="chatUnlockError" class="chat-error" hidden></p>
+        </section>
+
+        <section id="chatPanel" class="chat-card chat-panel" hidden>
+          <div id="chatLog" class="chat-log" aria-live="polite">
+            <div class="chat-empty">
+              <strong>Ask anything about the PCTM guide.</strong>
+              <span>질문한 언어로 답변합니다. 영어 답변을 원하면 위에서 "English"를 선택하세요.</span>
+            </div>
+          </div>
+          <form id="chatForm" class="chat-form">
+            <textarea id="chatInput" rows="2" maxlength="2000" placeholder="Type your question… (Enter to send, Shift+Enter for a new line)" required></textarea>
+            <button id="chatSendButton" type="submit" class="chat-send-button">Send</button>
+          </form>
+        </section>
+      </main>
+    </div>
+    <script src="./chat.js"></script>
+  </body>
+</html>

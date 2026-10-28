@@ -10,7 +10,7 @@ const YEAR = 2026;
 
 // Set this to your deployed Apps Script Web App URL (see README) to enable
 // editing role assignments from the dashboard. Leave blank to disable editing.
-const EDIT_ENDPOINT = "https://script.google.com/macros/s/AKfycbwlBDUQt8kDJT4ngzlqmjF6by31Y5Pm2iX_bfq3RRNeNKW45CVNav5atwlbF1i8QoBF/exec";
+const EDIT_ENDPOINT = "https://script.google.com/macros/s/AKfycbzruPJePcjaxL6ivZ-Mn7uaVkpRKx6ZNeBGPF1TEKJmy8zYE6BmAqNwRvVuqlzdo1_X/exec";
 const EDIT_PASSWORD_KEY = "pctm_edit_password";
 
 const MONTH_NAMES = { 1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun", 7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec" };

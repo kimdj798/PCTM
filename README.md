@@ -176,3 +176,52 @@ then opens the browser's
 native print dialog. The speech-timing values are a fixed reference table
 (not sourced from the Sheet). Same availability rule as Export: only shown
 for a real `2026` tab meeting.
+
+## PCTM Assistant (chatbot)
+
+The **Ask PCTM** button in the dashboard's top bar opens
+[`chat.html`](public/chat.html) in a new tab: a password-protected chatbot
+that answers questions using only the club guide PDF on Google Drive
+(`KNOWLEDGE_FILE_ID` in [`Code.gs`](apps-script/Code.gs)). It answers in the
+language of the question; picking **Answer in → English** at the top (or
+asking for English in the chat) makes it answer in English. **New chat**
+clears the conversation.
+
+It runs through the same Apps Script Web App as Edit fields: the script
+reads the PDF from Drive with the owner's permissions (so the PDF does not
+need to be shared publicly) and sends it, with the conversation, to the
+Gemini API. The API key never reaches the browser.
+
+### Setup
+
+1. Create a Gemini API key at <https://aistudio.google.com/apikey>.
+2. In Apps Script, open **Project Settings → Script Properties** and add:
+   - `GEMINI_API_KEY` — the key from step 1
+   - `CHAT_PASSWORD` — the shared password for the chatbot page (separate
+     from `EDIT_PASSWORD`, so chatbot users can't edit the sheet)
+   - `GEMINI_MODEL` *(optional)* — a Gemini model id; defaults to
+     `gemini-flash-latest`
+   These live outside the code, so re-pasting `Code.gs` doesn't erase them.
+3. Paste the latest `Code.gs` (keep your real `EDIT_PASSWORD`) and save.
+4. Select **`authorizeChatbot`** in the editor toolbar's function dropdown
+   and click **Run**. Approve the Drive and external-request permissions
+   when prompted (deploying alone doesn't ask for them, and the chatbot
+   fails with a `DriveApp.getFileById` permission error until you do).
+   The execution log shows the PDF's name and `Gemini API check: HTTP 200`.
+5. Deploy → Manage deployments → edit the existing deployment → **New
+   version** (keeps the same `/exec` URL).
+
+### Notes
+
+- The whole PDF is sent with every question (up to 15 MB), so a long guide
+  costs more tokens per question; the free Gemini tier is usually enough
+  for a club.
+- If a model is overloaded or rate-limited, the script moves straight on
+  to the next one in `FALLBACK_GEMINI_MODELS` (see `Code.gs`); if every
+  model is busy it tries one more round before telling the user to try
+  again later. Run `testChatbot` from the editor to see which models were
+  tried in the execution log.
+- On the free tier, Google may use prompts to improve its models — don't
+  put private member data in the knowledge PDF.
+- To change the knowledge source, upload a new PDF to Drive and update
+  `KNOWLEDGE_FILE_ID`, or replace the file's contents in Drive (same ID).
