@@ -26,20 +26,21 @@ endpoint), so no server or API key is required once deployed.
   Speech Pipeline section — who's speaking, when (by month/week), on what
   project, with what title.
 - **`2026` tab** (`gid=1141924141`): one column per meeting, with role rows
-  (Toastmasters, Table Topics Master, Debate Master, Quiz Master, three Speaker
-  slots with title/pathway/project, three Evaluators, Grammarian, word/quote of
+  (Toastmasters, Table Topics Master, Quiz Master, three Speaker
+  slots with title/pathway/project, Grammarian, word/quote of
   the day, Timer, Ah-counter). Add a new column with a date label (e.g.
   `Sep 5`) to schedule another meeting — the dashboard picks it up
   automatically.
   - The **readiness score** counts everything shown in the Role assignments
-    panel — the 10 support roles (Toastmasters, Table Topics Master, Debate
-    Master, Quiz Master, Evaluator #1/#2/#3, Grammarian, Timer, Ah-counter)
-    plus the three Speaker names (13 total). Speaker title/pathway/project,
-    word/quote of the day, and Theme/TQ are still tracked and editable, but
-    don't affect the score. In the grid, each Speaker #N/Evaluator #N pair
-    is grouped on its own row (rows 2–4). Speaker/Evaluator slots are
-    detected by label, so adding a `Speaker #4` block and `Evaluator #4` row
-    to the sheet works without code changes.
+    panel — the 6 support roles (Toastmasters, Table Topics Master, Quiz
+    Master, Grammarian, Timer, Ah-counter) plus the three Speaker names
+    (9 total). Speaker title/pathway/project, word/quote of
+    the day, and Theme/TQ are still tracked and editable, but don't affect
+    the score. In the grid, the speakers follow the first two roles.
+    Speaker slots are detected by label, so adding a `Speaker #4` block to
+    the sheet works without code changes. Evaluator rows are no longer
+    tracked; any `Evaluator #N` or `Debate Master` rows left in the sheet
+    are ignored.
 - **Theme / TQ** (optional rows on the `2026` tab): add a row labeled `Theme`
   and a row labeled `TQ` (case-insensitive) anywhere in column A, with the
   meeting's theme and theme questions in that meeting's column. For `TQ`,
@@ -73,28 +74,21 @@ endpoint), so no server or API key is required once deployed.
   it; it isn't editable from the dashboard's Edit fields mode.
 - **`AgendaTimes` tab**: three columns, no header, **one row per line of the
   Standard agenda table** (every segment, including sub-rows like `Timer's
-  report` — not just the 9 main blocks), in the exact top-to-bottom order
-  they appear on screen: column A is the start time (only filled in on the
-  first row of each time block — e.g. `Opening`, `Theme Talk`, `Prepared
-  Speech`; leave it blank on sub-rows since they share their block's time),
-  column B is the segment name, column C is the role taker. Unlike
-  everything else on this tab, none of this is tied to any one meeting — it
-  applies to the Standard agenda template shown on every meeting view.
-  Editable via Edit fields (every Time/Segment/Role taker cell becomes its
-  own input, matched to the sheet purely by row position); a row missing
-  from this tab falls back to the built-in default text for that line and
-  isn't editable until you add its row. See
+  report`), in top-to-bottom order. Column A is the start time, column B the
+  segment name, column C the role taker. **The tab defines the layout**: a
+  row with a time in column A starts a new time block, and rows with column
+  A blank belong to the block above. So adding, removing, or merging
+  segments is done purely in the sheet — no code change needed. Every block
+  except the first (Opening) and last (Closing) gets the highlighted-orange
+  treatment. None of this is tied to any one meeting; it applies to the
+  Standard agenda shown on every meeting view and in the print agenda.
+  Every Time/Segment/Role taker cell is editable via Edit fields (saved to
+  this tab). If the tab is empty or can't be read, the dashboard falls back
+  to a built-in default. See
   [`apps-script/agenda-times-seed.csv`](apps-script/agenda-times-seed.csv)
-  for the full 24-row starter content (segment/role-taker text from the
-  built-in template, with the club's current custom times already filled
-  in) — paste it into the tab starting at A1, overwriting the old 9-row/
-  2-column content, to make every field editable without changing what's
-  currently displayed.
-
-The "Standard agenda" panel's row layout (which segments belong to which
-time block, and which rows get the highlighted-orange treatment) is a fixed
-template matching PCTM's printed agenda sheet — only the Time/Segment/Role
-taker text in each cell is sourced from (and editable via) the Sheet.
+  for a copy of the current content. To paste it into the sheet, convert
+  commas to tabs first (Sheets splits pasted text on tabs, not commas), or
+  paste into column A and use **Data → Split text to columns**.
 
 ## Refresh behavior
 
@@ -150,16 +144,20 @@ button stays hidden until this is set.
 - The password is a simple shared gate, not per-user authentication — treat
   it like a door code, and rotate it (redeploy with a new `EDIT_PASSWORD`)
   if it leaks.
-- Only fields on the `2026` roles tab are editable (role assignments,
-  speaker title/pathway/project). The speech schedule tab is read-only from
-  the dashboard.
+- Editable fields live on the `2026` roles tab (role assignments, speaker
+  title/pathway/project, Theme/TQ) and the `AgendaTimes` tab (Standard
+  agenda). Agenda edits are sent with the tab name, so an Apps Script
+  deployment older than this change rejects them ("Apps Script is
+  outdated") instead of writing into the `2026` tab — redeploy `Code.gs`
+  as a new version to enable them. The speech schedule tab is read-only
+  from the dashboard.
 
 ## Exporting a meeting summary
 
 The **Export** button next to Edit fields (Meeting Roles heading) generates a
 KakaoTalk-ready text summary of the selected meeting — date, Toastmaster/
-Table Topics/Debate/Quiz Master, Grammarian/Timer/Ah Counter, and every
-Speaker/Evaluator pair — and opens it in a dialog with a **Copy to
+Table Topics/Quiz Master, Grammarian/Timer/Ah Counter, and every
+Speaker — and opens it in a dialog with a **Copy to
 clipboard** button. Paste directly into a group chat. Only available when a
 real meeting exists in the `2026` tab (not the Speech Pipeline preview
 shown for meetings that haven't been added yet).
@@ -172,7 +170,7 @@ same names and ordering as the live Role assignments panel), club officers,
 club mission, the standard Time/Segment/Role taker table, a speech-timing
 reference (green/yellow/red), Club Business (auto-filled with the next
 scheduled meeting's date), Theme/TQ/WOD, and a speaker info table
-(name/title/pathway-project/evaluator) — so you can review it before
+(name/title/pathway-project) — so you can review it before
 committing to anything. A **Print / Save as PDF** button inside that preview
 then opens the browser's
 native print dialog. The speech-timing values are a fixed reference table

@@ -17,22 +17,24 @@ const MONTH_NAMES = { 1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun"
 const KOREAN_MONTH_TO_NUM = { "1월": 1, "2월": 2, "3월": 3, "4월": 4, "5월": 5, "6월": 6, "7월": 7, "8월": 8, "9월": 9, "10월": 10, "11월": 11, "12월": 12 };
 const TEXT_ROLE_LABELS = new Set(["word of the day", "quote of the day"]);
 const META_ROLE_LABELS = new Set(["theme", "tq", "cancelled"]);
-// PCTM's standard meeting agenda template (Time / Segment / Role taker),
-// matching the club's printed agenda sheet exactly.
+const AGENDA_SHEET_NAME = "AgendaTimes";
+// PCTM's standard meeting agenda template (Time / Segment / Role taker).
+// Only used as a fallback when the AgendaTimes tab is empty or unreadable.
 const AGENDA_BLOCKS = [
   { time: "10:00", rows: [["Opening", "Chairperson"]] },
-  { time: "10:10", highlight: true, rows: [["Theme Talk", "Toastmasters"]] },
   {
-    time: "10:40",
+    time: "10:10",
+    highlight: true,
     rows: [
       ["Program Introduction", "Toastmasters"],
       ["Role takers introduction", "Toastmasters"],
       ["Grammarian", "Grammarian"],
       ["Timer", "Timer"],
+      ["Theme question answering session", "Toastmasters"],
     ],
   },
   {
-    time: "10:45",
+    time: "10:35",
     highlight: true,
     rows: [
       ["Prepared Speech", "Toastmasters"],
@@ -43,7 +45,7 @@ const AGENDA_BLOCKS = [
     ],
   },
   {
-    time: "11:10",
+    time: "11:05",
     highlight: true,
     rows: [
       ["Table Topics", "Topics master"],
@@ -52,27 +54,24 @@ const AGENDA_BLOCKS = [
       ["Vote for the best speaker", ""],
     ],
   },
-  { time: "11:10", highlight: true, rows: [["Debate (10 + 10)", "Debate Master"]] },
   {
-    time: "11:30",
-    highlight: true,
-    rows: [
-      ["Speech Evaluation", "Evaluator"],
-      ["Speech evaluation", ""],
-    ],
-  },
-  {
-    time: "11:40",
+    time: "11:25",
     highlight: true,
     rows: [
       ["Evaluation", "Toastmasters"],
+      ["Speech evaluation", "Evaluator"],
       ["Timer's report", "Timer"],
       ["Grammarian's report", "Grammarian"],
-      ["Quiz session", "Quiz master"],
-      ["Closing", "Chairperson"],
     ],
   },
-  { time: "11:50", rows: [["Club Business", "Chairperson"]] },
+  { time: "11:40", highlight: true, rows: [["Quiz session", "Quiz master"]] },
+  {
+    time: "11:50",
+    rows: [
+      ["Closing", "Chairperson"],
+      ["Club Business", "Chairperson"],
+    ],
+  },
 ];
 
 async function fetchPublicSheets() {
@@ -209,6 +208,9 @@ function buildRolesModel(rows) {
   while (i < dataRows.length) {
     const label = clean(dataRows[i]?.[0]);
     if (!label) { i += 1; continue; }
+    // Evaluator and Debate Master roles are no longer tracked; ignore any
+    // leftover rows.
+    if (/^Evaluator\s*#?\d+/i.test(label) || /^Debate\b/i.test(label)) { i += 1; continue; }
     if (/^Speaker\s*#?\d+/i.test(label)) {
       fields.push({
         type: "speaker", label,
@@ -299,15 +301,26 @@ function missingFields(meeting) {
 function editingAvailable() { return Boolean(EDIT_ENDPOINT); }
 function editingUnlocked() { return Boolean(sessionStorage.getItem(EDIT_PASSWORD_KEY)); }
 
-async function saveCell(row, col, value) {
+async function saveCell(row, col, value, sheet) {
   const password = sessionStorage.getItem(EDIT_PASSWORD_KEY) || "";
+  // Writes to tabs other than "2026" use A1 notation plus a tab name, which
+  // an outdated Apps Script deployment rejects instead of silently writing
+  // the cell into the "2026" tab.
+  const update = sheet
+    ? { sheet, cell: `${String.fromCharCode(64 + col)}${row}`, value }
+    : { row, col, value };
   const response = await fetch(EDIT_ENDPOINT, {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify({ password, updates: [{ row, col, value }] }),
+    body: JSON.stringify({ password, updates: [update] }),
   });
   const payload = await response.json().catch(() => ({ ok: false, error: "Invalid response from Apps Script." }));
-  if (!payload.ok) throw new Error(payload.error || "Save failed.");
+  if (!payload.ok) {
+    if (sheet && /invalid row\/column/i.test(payload.error || "")) {
+      throw new Error("Apps Script is outdated — redeploy apps-script/Code.gs.");
+    }
+    throw new Error(payload.error || "Save failed.");
+  }
   return payload;
 }
 
@@ -335,7 +348,7 @@ function updateEditToggle() {
   button.classList.toggle("is-active", state.editing);
 }
 
-function makeEditableField(currentValue, { row, col, placeholder = "Pending", multiline = false, onSaved }) {
+function makeEditableField(currentValue, { row, col, sheet, placeholder = "Pending", multiline = false, onSaved }) {
   const wrap = document.createElement("div");
   wrap.className = "editable-field";
   const input = document.createElement(multiline ? "textarea" : "input");
@@ -356,7 +369,7 @@ function makeEditableField(currentValue, { row, col, placeholder = "Pending", mu
     status.textContent = "Saving…";
     status.className = "editable-status saving";
     try {
-      await saveCell(row, col, next);
+      await saveCell(row, col, next, sheet);
       currentValue = next;
       status.textContent = "Saved";
       status.className = "editable-status saved";
@@ -495,25 +508,27 @@ function renderMeetingReadiness(meeting) {
 }
 
 function resolvedAgendaBlocks(agendaModel) {
-  let position = 0;
-  return AGENDA_BLOCKS.map(block => {
-    const rows = block.rows.map(([defaultSegment, defaultRoleTaker]) => {
-      const override = agendaModel?.[position];
-      position += 1;
-      return {
-        segment: override ? override.segment : defaultSegment,
-        roleTaker: override ? override.roleTaker : defaultRoleTaker,
-        sheetRow: override?.sheetRow ?? null,
-      };
-    });
-    const blockStartOverride = agendaModel?.[position - block.rows.length];
-    return {
+  // The AgendaTimes tab defines the layout: a row with a time starts a new
+  // block, rows without one belong to the block above. Every block except
+  // the first (Opening) and last (Closing) gets the highlight treatment.
+  const items = (agendaModel || []).filter(Boolean);
+  if (!items.length) {
+    return AGENDA_BLOCKS.map(block => ({
       highlight: block.highlight,
-      time: (blockStartOverride && blockStartOverride.time) || block.time,
-      timeSheetRow: blockStartOverride?.sheetRow ?? null,
-      rows,
-    };
+      time: block.time,
+      timeSheetRow: null,
+      rows: block.rows.map(([segment, roleTaker]) => ({ segment, roleTaker, sheetRow: null })),
+    }));
+  }
+  const blocks = [];
+  items.forEach(item => {
+    if (item.time || !blocks.length) {
+      blocks.push({ time: item.time, timeSheetRow: item.sheetRow, rows: [] });
+    }
+    blocks.at(-1).rows.push({ segment: item.segment, roleTaker: item.roleTaker, sheetRow: item.sheetRow });
   });
+  blocks.forEach((block, index) => { block.highlight = index > 0 && index < blocks.length - 1; });
+  return blocks;
 }
 
 function agendaTableHtml(blocks) {
@@ -562,7 +577,7 @@ function renderAgendaSection(agendaModel) {
         timeTd.rowSpan = block.rows.length;
         if (block.timeSheetRow) {
           timeTd.appendChild(makeEditableField(block.time, {
-            row: block.timeSheetRow, col: 1,
+            row: block.timeSheetRow, col: 1, sheet: AGENDA_SHEET_NAME,
             onSaved: next => {
               agendaModel[block.timeSheetRow - 1] = { ...agendaModel[block.timeSheetRow - 1], time: next, sheetRow: block.timeSheetRow };
             },
@@ -577,7 +592,7 @@ function renderAgendaSection(agendaModel) {
       segTd.className = isBlockStart ? "agenda-segment" : "agenda-sub-segment";
       if (row.sheetRow) {
         const field = makeEditableField(row.segment, {
-          row: row.sheetRow, col: 2, placeholder: "Segment",
+          row: row.sheetRow, col: 2, sheet: AGENDA_SHEET_NAME, placeholder: "Segment",
           onSaved: next => {
             agendaModel[row.sheetRow - 1] = { ...agendaModel[row.sheetRow - 1], segment: next, sheetRow: row.sheetRow };
           },
@@ -598,7 +613,7 @@ function renderAgendaSection(agendaModel) {
       roleTd.className = "agenda-role-taker";
       if (row.sheetRow) {
         roleTd.appendChild(makeEditableField(row.roleTaker, {
-          row: row.sheetRow, col: 3, placeholder: "Role taker",
+          row: row.sheetRow, col: 3, sheet: AGENDA_SHEET_NAME, placeholder: "Role taker",
           onSaved: next => {
             agendaModel[row.sheetRow - 1] = { ...agendaModel[row.sheetRow - 1], roleTaker: next, sheetRow: row.sheetRow };
           },
@@ -773,7 +788,6 @@ function formatExportDate(meeting) {
 function buildExportText(meeting) {
   const roleValue = label => meeting.roles.find(r => r.label === label)?.member || "";
   const speakerValue = label => meeting.speakers.find(s => s.label === label)?.member || "";
-  const debate = roleValue("Debate Master");
 
   return [
     DASHBOARD_URL,
@@ -782,16 +796,12 @@ function buildExportText(meeting) {
     "",
     `🍋 Toastmaster : ${roleValue("Toastmasters")}`,
     `🍋 Table Topics Master : ${roleValue("Table Topics Master")}`,
-    `🍋 Debate Master : ${debate}${debate ? " " : ""}(연설 2회 이상 차면 토론은 자동 취소됩니다)`,
     `🍋 Quiz Master : ${roleValue("Quiz Master")}`,
     `🟩 Grammarian : ${roleValue("Grammarian")}`,
     `🟩 Timer : ${roleValue("Timer")}`,
     `🟩 Ah Counter : ${roleValue("Ah-counter")}`,
     "",
-    ...meeting.speakers.flatMap((s, i) => [
-      `🫐 Speaker #${i + 1} : ${speakerValue(s.label)}`,
-      `🫐 Evaluator #${i + 1} : ${roleValue(`Evaluator #${i + 1}`)}`,
-    ]),
+    ...meeting.speakers.map((s, i) => `🫐 Speaker #${i + 1} : ${speakerValue(s.label)}`),
   ].join("\n");
 }
 
@@ -824,7 +834,6 @@ async function copyExportText() {
 const SPEECH_TIME_TABLE = [
   ["Table Topics speech", "1:00", "1:30", "2:00"],
   ["Prepared speech", "5:00", "6:00", "7:00"],
-  ["Debate speech", "1:00", "1:30", "2:00"],
   ["Speech Evaluation", "2:00", "2:30", "3:00"],
 ];
 
@@ -846,9 +855,8 @@ function buildPrintAgendaHtml(meeting, model) {
   const speechTimeRows = SPEECH_TIME_TABLE
     .map(([kind, g, y, r]) => `<tr><td>${kind}</td><td>${g}</td><td>${y}</td><td>${r}</td></tr>`).join("");
   const speakerRows = meeting.speakers.map((s, i) => {
-    const evaluator = meeting.roles.find(r => r.label === `Evaluator #${i + 1}`)?.member || "";
     const pathwaysProject = [s.pathways, s.project].filter(Boolean).join(" — ");
-    return `<tr><td>${i + 1}</td><td>${escapeHtml(s.member)}</td><td>${escapeHtml(s.title)}</td><td>${escapeHtml(pathwaysProject)}</td><td>${escapeHtml(evaluator)}</td></tr>`;
+    return `<tr><td>${i + 1}</td><td>${escapeHtml(s.member)}</td><td>${escapeHtml(s.title)}</td><td>${escapeHtml(pathwaysProject)}</td></tr>`;
   }).join("");
   const assignmentRows = orderedRoleAssignments(meeting)
     .map(item => `<tr><td>${escapeHtml(item.label)}</td><td>${escapeHtml(item.value || "Pending")}</td></tr>`).join("");
@@ -886,8 +894,8 @@ function buildPrintAgendaHtml(meeting, model) {
         <p>1. Next meeting date : ${escapeHtml(findNextMeetingDate(meeting, model))}</p>
         <h3>Speech information</h3>
         <table class="print-speech-info">
-          <thead><tr><th>#</th><th>Name</th><th>Title</th><th>Pathways Project</th><th>Evaluator</th></tr></thead>
-          <tbody>${speakerRows || `<tr><td colspan="5">TBD</td></tr>`}</tbody>
+          <thead><tr><th>#</th><th>Name</th><th>Title</th><th>Pathways Project</th></tr></thead>
+          <tbody>${speakerRows || `<tr><td colspan="4">TBD</td></tr>`}</tbody>
         </table>
       </div>
     </div>`;
@@ -958,26 +966,17 @@ function recomputeReadiness(meeting) {
 }
 
 function orderedRoleAssignments(meeting) {
-  // Same grouping as the live grid: first two "other" roles, then each
-  // Speaker #N / Evaluator #N pair, then the remaining "other" roles.
-  const isEvaluator = r => /^evaluator\s*#?\d+/i.test(r.label);
+  // Same grouping as the live grid: first two "other" roles, then the
+  // speakers, then the remaining "other" roles.
   const excludedLabels = new Set(["word of the day", "quote of the day"]);
-  const otherRoles = meeting.roles.filter(r => !excludedLabels.has(r.label.toLowerCase()) && !isEvaluator(r));
-  const evaluators = meeting.roles.filter(isEvaluator);
-  const slotNumber = label => label.match(/\d+/)?.[0];
+  const otherRoles = meeting.roles.filter(r => !excludedLabels.has(r.label.toLowerCase()));
 
   const items = [];
   const pushRole = r => items.push({ label: r.label, value: r.isText ? r.value : r.member, role: r, isSpeaker: false });
   const pushSpeaker = s => items.push({ label: s.label, value: s.member, speaker: s, isSpeaker: true });
 
   otherRoles.slice(0, 2).forEach(pushRole);
-  meeting.speakers.forEach(s => {
-    pushSpeaker(s);
-    const evaluator = evaluators.find(r => slotNumber(r.label) === slotNumber(s.label));
-    if (evaluator) pushRole(evaluator);
-  });
-  // Evaluators without a matching speaker slot still get shown.
-  evaluators.filter(r => !items.some(item => item.role === r)).forEach(pushRole);
+  meeting.speakers.forEach(pushSpeaker);
   otherRoles.slice(2).forEach(pushRole);
   return items;
 }
